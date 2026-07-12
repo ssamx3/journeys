@@ -10,9 +10,33 @@
 		22A9FBB13003D23A00118C3F /* journeys.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = journeys.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		22A9FBC43003D25D00118C3F /* Exceptions for "journeys" folder in "journeys" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				planning.md,
+			);
+			target = 22A9FBB03003D23A00118C3F /* journeys */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		22A9FBC53003D25D00118C3F /* Exceptions for "journeys" folder in "Compile Sources" phase from "journeys" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 22A9FBAD3003D23A00118C3F /* Sources */;
+			membershipExceptions = (
+				planning.md,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		22A9FBB33003D23A00118C3F /* journeys */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				22A9FBC43003D25D00118C3F /* Exceptions for "journeys" folder in "journeys" target */,
+				22A9FBC53003D25D00118C3F /* Exceptions for "journeys" folder in "Compile Sources" phase from "journeys" target */,
+			);
 			path = journeys;
 			sourceTree = "<group>";
 		};
@@ -256,6 +280,7 @@
 				DEVELOPMENT_TEAM = 3KYQA6KZKN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = platforms;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +313,7 @@
 				DEVELOPMENT_TEAM = 3KYQA6KZKN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = platforms;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
