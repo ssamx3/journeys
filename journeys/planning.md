@@ -28,6 +28,12 @@
  return to the starting ui
  
  Additionally you can open your passbook and see your stubs (individual journeys) and check your total stats and railpass progress for each subject (after travelling a certain amount of miles on each line, you can level your pass up to silver, gold, platinum etc like a credit card)
+ 
+ 
+ 
+ Passes:
+ Commuter PASS: basically your streak. Not tiered
+ RailPASS: Shows you how much youve put into each rail line with tiers.
 
  Things to consider:
  Need a way to procedurally generate fake place names

@@ -6,7 +6,6 @@ final class Journey {
     var company: RailCompany
     var miles: Double
     var isEndless: Bool
-    var overdrive: Bool
     var startTime: Date
     var endTime: Date
     var startPlace: String
@@ -16,7 +15,6 @@ final class Journey {
         self.company = company
         self.miles = miles
         self.isEndless = isEndless
-        self.overdrive = overdrive
         self.startTime = startTime
         self.endTime = endTime
         self.startPlace = startPlace
