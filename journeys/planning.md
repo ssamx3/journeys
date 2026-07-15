@@ -40,6 +40,29 @@
  Need a way to create logo word art from the subjects (or maybe include a mini logo maker)
  Need a way to make 3d ticket cheaply
  
+ 
+ 
+ UI: 
+ 
+ Main ui -> opens to a map. you are a node in the centre of the map, and there are four other "nodes" around you. each node is joined to the centre node by a connector, a bit like the tube map. the connectors shouldnt all be straight lines, and some should have little curves and turns in them (but obviously not so much that it would derail the train). This is all generated procedurally when the app is opened Below the map, there is also a size-changing sheet, which contains all the other features (a bit like find my or flighty or waze or apple maps) (not entirely sure how to do this one JUST yet so should research). on the ipad and mac, the sheet shouldnt come up from the bottom, but instead be on the side in its already expanded state. not sure if this is a native feature. 
+ Clicking on a node will highlight the connector between the central node and the node selected, and bring up the journey planning flow in the sheet. the steps of this are 
+ 1. Show the central node location -> Selected node location with some text like "your journey" and then a big button at the bottom of the sheet to say "next". the sheet is currently in its smallest state
+ 2. Allow you to pick a train operator, still in the smallest state, big next button again. clicking a train operator changes the connector colour to the accent colour of the operator.
+ 3. Nice tactile lines slider to pick focus time, sliding behind 0 of the slider puts it in infinite (stopwwatch) mode  OR maybe a toggle i havent decided. still smallest, next button 
+ 4. sheet expands to MEDIUM size with a fluid springy animation showing the 3d ticket with all the details filled in and a GO button at the bottom. If the user chose indefinite, the destination field on the card shows --- 
+ 5. Enters the timer/stopwatch view.
+ 
+Timer view -> 
+The Selected route becomes a progress bar, the time left and stats are displayed in a small-medium version of the sheet at the bottom. there is also a cancel button available if you expand the sheet. 
+Stopwatch view -> 
+first thirty minutes is the selected route, but after that the map recentres and the 1st destination node becomes the central node, and a random new node is added to the route. we keep repeating this but every ten minutes now as the "stops" system. The sheet has the count up time and stats whatnot the big red "disembark" button. When this is clicked, the node currently travelling to becomes the final node, and an additional countdown until arrival at that node appears.
+
+When finished -> The sheet shows you your stats from that journey and progress towards your railpass tier, then expands and shows you the ticket to let you rip the stub off, then if it was your stamp session you can also stamp your stamper card. Then goes back to the home screen with the destination just travelled to as the central node. 
+
+In the sheet, there should be a way to pin things to the bottom (eg a big button)
+In the sheet, when on the main map view and not in a session, you can expand it to see your previous stubs, your stubbook and your streak. it looks like a homescreen of widgets almost
+
+ 
  */
 
 

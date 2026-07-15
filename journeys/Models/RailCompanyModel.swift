@@ -21,4 +21,14 @@ final class RailCompany {
 
 enum RailPassLevel: String, Codable {
     case bronze, silver, gold, platinum, titanium
+    
+    var pace: Double {
+        switch self {
+        case .bronze:    return 0.0167
+        case .silver:    return 0.0180556
+        case .gold:      return 0.0194444
+        case .platinum:  return 0.0208333
+        case .titanium:  return 0.0222222
+        }
+    }
 }
