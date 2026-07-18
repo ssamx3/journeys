@@ -22,7 +22,7 @@ final class JourneyStore {
         let journey = Journey(company: result.company, miles: result.miles, startTime: result.startTime, endTime: result.endTime, startPlace: result.startPlace, endPlace: result.endPlace)
         context.insert(journey)
         result.company.totalMiles += result.miles
-        result.company.totalTimeTravelled += result.company.totalTimeTravelled
+        result.company.totalTimeTravelled += result.endTime.timeIntervalSince(result.startTime)
         result.company.level = level(forTotalMiles: result.company.totalMiles)
         
         let duration = result.endTime.timeIntervalSince(result.startTime)
@@ -133,7 +133,9 @@ final class JourneyStore {
     
     func currentStreakStatus() -> (stampsThisWeek: Int, streakWeeks: Int, milestone: CommuterPassMilestone) {
         let pass = fetchOrCreateCommuterPass()
-        return(pass.stampsLast7Days, pass.streakWeeks, pass.milestone)
+        evaluateStreak(for: pass)
+        save()
+        return (pass.stampsLast7Days, pass.streakWeeks, pass.milestone)
     }
 
     

@@ -62,6 +62,25 @@ When finished -> The sheet shows you your stats from that journey and progress t
 In the sheet, there should be a way to pin things to the bottom (eg a big button)
 In the sheet, when on the main map view and not in a session, you can expand it to see your previous stubs, your stubbook and your streak. it looks like a homescreen of widgets almost
 
+
+
+
+Ui redesign: 
+Two options:
+Singular main page - 
+The top section has a place to get tickets from. It shows the location you are currently at, and then theres a selector to choose the next location you want to go to (or randomise) and then a GET TICKETS -> button which takes you to the ticket flow (which will remain largely the same as prior but just without all the nodes stuff and sheet)
+There is then a scrolling departures board which shows previous journeys / suggested ones, has a dot font for fun to make it look like departures board but it is just a Hstack you can scroll vertically with rounded rectangle cards that have destinations and times and operators on it 
+A HStack {} of your cards/passes (you can horizontally scroll through them), tapping on  one will bring up its respective view with more detailed information about it 
+A big stand out card that looks like a passport cover almost that allows you to open your stub book and look through your previous journeys.
+
+Tabbed view - 
+Basically the same but instead there is a departures tab and a Passes tab seperating the departures screen from the Cards and Stubbook
+OR 3 tabs 
+tab 1 - departures
+tab 2 - passes
+tab 3 - stubs (stubs has more detail, filters and a search feature), exposes this all on one click of the tab bar rather than having to go to the stubbook directly
+
+However i question how much people will use pages 2 and 3 and if they truly need seperate tabs 
  
  */
 
