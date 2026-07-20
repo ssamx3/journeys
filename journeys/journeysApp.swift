@@ -2,20 +2,24 @@
 //  journeysApp.swift
 //  journeys
 //
-//  Created by sam on 12/07/2026.
-//
 
 import SwiftUI
 import SwiftData
 
 @main
 struct journeysApp: App {
-   
-
     var body: some Scene {
         WindowGroup {
-            ContainerView()
+            RootView()
         }
-      
+        .modelContainer(for: [Journey.self, RailCompany.self, CommuterPass.self, Stamp.self])
+    }
+}
+
+struct RootView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        ContainerView(store: JourneyStore(context: modelContext))
     }
 }

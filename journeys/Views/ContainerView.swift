@@ -6,44 +6,107 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContainerView: View {
-    @State var showingStubBook = false
+    let store: JourneyStore
+
+    @State private var showingStubBook = false
+    @State private var showingCreatePass = false
     @State private var statsRange: StatsRange = .week
 
-  
+    @State private var companies: [RailCompany] = []
+    @State private var recentJourneys: [Journey] = []
+    @State private var commuterPass: CommuterPass?
+    
+    // Extracted stats to prevent main thread rendering lag
+    @State private var statsSnapshot = StatsSnapshot(miles: 0, timeLabel: "0m", topOperator: "-", personalBestMiles: 0)
+
     private let currentStation = "Folsense Station"
-    private let milesThisWeek = 142
 
     var body: some View {
-            NavigationStack {
-                ZStack {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            heroCard
-                            
-                            passesCard
+        NavigationStack {
+            ZStack {
 
-                            StubbookEntryCard()
-                                .contentShape(RoundedRectangle(cornerRadius: 16))
-                                .onTapGesture { showingStubBook = true }
-                            
-                            statsCard
-                        }
-                        .padding(.horizontal)
-                       
-                        .padding(.bottom, 80)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+
+
+                ScrollView(showsIndicators: false) {
+
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        heroCard
+
+                        passesCard
+
+                        stubsCard
+                            .contentShape(RoundedRectangle(cornerRadius: 16))
+                            .onTapGesture { showingStubBook = true }
+
+                        statsCard
+
+                        debugCard
                     }
-                    .background(Color(.systemGroupedBackground))
-                    
-  
-                
+                    .padding(.horizontal)
+                    .padding(.bottom, 80)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(isPresented: $showingStubBook) { StubBookView() }
             }
-        }    // MARK: - Sections
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showingStubBook) { StubBookView() }
+            .sheet(isPresented: $showingCreatePass, onDismiss: refreshData) {
+                CreatePassView(store: store)
+            }
+            .onAppear(perform: refreshData)
+            .onChange(of: statsRange) { _, _ in
+                updateStats()
+            }
+        }
+    }
+
+    // MARK: - Data Refresh
+
+    private func refreshData() {
+        companies = store.fetchAllCompanies()
+        recentJourneys = store.fetchRecentJourneys(limit: 10)
+        commuterPass = store.fetchOrCreateCommuterPass()
+        updateStats()
+    }
+
+    private func updateStats() {
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate: Date
+        
+        switch statsRange {
+        case .week:
+            startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        case .year:
+            startDate = calendar.date(byAdding: .day, value: -365, to: now) ?? now
+        }
+        
+        let journeys = store.fetchJourneys(from: startDate)
+        
+        let totalMiles = journeys.reduce(0) { $0 + $1.miles }
+        let totalTime = journeys.reduce(0) { $0 + $1.endTime.timeIntervalSince($1.startTime) }
+
+        let operatorMiles = Dictionary(grouping: journeys, by: { $0.company.name })
+            .mapValues { $0.reduce(0) { $0 + $1.miles } }
+        let topOperator = operatorMiles.max(by: { $0.value < $1.value })?.key ?? "-"
+
+        let personalBest = journeys.map(\.miles).max() ?? 0
+
+        statsSnapshot = StatsSnapshot(
+            miles: Int(totalMiles),
+            timeLabel: formatTime(totalTime),
+            topOperator: topOperator,
+            personalBestMiles: Int(personalBest)
+        )
+    }
+
+    // MARK: - Sections
 
     private var heroCard: some View {
         VStack {
@@ -55,9 +118,7 @@ struct ContainerView: View {
                     Text(currentStation)
                         .font(.largeTitle.bold())
                 }
-                
-                
-                
+
                 Button {
                     // get tickets action
                 } label: {
@@ -78,7 +139,6 @@ struct ContainerView: View {
             .cornerRadius(14)
         }.padding(.top)
     }
-    
 
     private var passesCard: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -87,21 +147,38 @@ struct ContainerView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Image(systemName: "plus")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Button {
+                    showingCreatePass = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    CommuterPassCard(streak: 12, stampedDays: [true, true, true, false, false, false, false])
-                    PassCard(title: "medicine", subtitle: "Bronze", iconName: "train.fill", backgroundColor: Color(.blue), blockColor: Color(.pink), blockShape: .diagonal, blockPosition: .bottom)
-                    PassCard(title: "psychology", subtitle: "Bronze", iconName: "train.fill", backgroundColor: Color(.indigo), blockColor: Color(.purple), blockShape: .circle, blockPosition: .left)
-                    PassCard(title: "biology", subtitle: "Bronze", iconName: "train.fill", backgroundColor: Color(.magenta), blockColor: Color(.cyan), blockShape: .square, blockPosition: .left)
-                    
-             
-                   
+                // Swapped HStack for LazyHStack
+                LazyHStack(spacing: 12) {
+                    if let pass = commuterPass {
+                        CommuterPassCard(
+                            streak: pass.streakWeeks,
+                            stampedDays: stampedDays(for: pass)
+                        )
+                    }
 
+                    ForEach(companies) { company in
+                        PassCard(
+                            title: company.name,
+                            cardText: company.cardText,
+                            subtitle: company.level.rawValue.capitalized,
+                            iconName: "train.fill",
+                            backgroundColor: company.backgroundColor,
+                            blockColor: company.blockColor,
+                            blockShape: company.blockShape,
+                            blockPosition: company.blockPosition,
+                            fontColor: company.fontColor
+                        )
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -111,8 +188,47 @@ struct ContainerView: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(14)
     }
-    
-    
+
+    private var stubsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("stubs")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                // Swapped HStack for LazyHStack to prevent mass main-thread relationship faults
+                LazyHStack(spacing: 16) {
+                    if recentJourneys.isEmpty {
+                        Text("No journeys yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(recentJourneys.prefix(5)) { journey in
+                            Stub(
+                                originCode: PlaceNames.byName[journey.startPlace]?.code ?? "UNK",
+                                destinationCode: PlaceNames.byName[journey.endPlace]?.code ?? "UNK",
+                                subtitle: formatDuration(journey.endTime.timeIntervalSince(journey.startTime)),
+                                operatorName: journey.company.name
+                            )
+                        }
+                    }
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 6)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+    }
+
     private var statsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -123,7 +239,6 @@ struct ContainerView: View {
                 StatsRangeSwitch(selection: $statsRange)
             }
 
-            
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
                     StatTile(value: "\(statsSnapshot.miles)", label: "miles travelled")
@@ -141,18 +256,46 @@ struct ContainerView: View {
         .cornerRadius(14)
     }
 
+    private var debugCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("debug")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Button {
+                    addDummyJourney()
+                } label: {
+                    Label("Add Journey", systemImage: "plus.circle")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.green.opacity(0.15))
+                        .foregroundStyle(.green)
+                        .clipShape(Capsule())
+                }
+
+                Button {
+                    removeLastJourney()
+                } label: {
+                    Label("Remove Last", systemImage: "minus.circle")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.red.opacity(0.15))
+                        .foregroundStyle(.red)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+    }
+
     // MARK: - Stats
 
-    private var statsSnapshot: StatsSnapshot {
-        switch statsRange {
-        case .week:
-            return StatsSnapshot(miles: 142, timeLabel: "6h 40m", topOperator: "EPQ", personalBestMiles: 38)
-        case .month:
-            return StatsSnapshot(miles: 612, timeLabel: "27h 15m", topOperator: "Maths", personalBestMiles: 54)
-        case .year:
-            return StatsSnapshot(miles: 7180, timeLabel: "312h 50m", topOperator: "Psychology", personalBestMiles: 96)
-        }
-    }
     private struct StatsSnapshot {
         let miles: Int
         let timeLabel: String
@@ -201,14 +344,11 @@ struct ContainerView: View {
     }
 
     private struct StatTile: View {
-        
         let value: String
         let label: String
-       
 
         var body: some View {
             VStack(alignment: .leading, spacing: 6) {
-                
                 Spacer()
                 Text(value)
                     .font(.title3.weight(.semibold))
@@ -226,43 +366,111 @@ struct ContainerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
+
+    // MARK: - Helpers
+
+    private func stampedDays(for pass: CommuterPass) -> [Bool] {
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        let daysSinceMonday = (weekday + 5) % 7
+        guard let monday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: now) else {
+            return Array(repeating: false, count: 7)
+        }
+
+        return (0..<7).map { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: monday) else { return false }
+            let startOfDay = calendar.startOfDay(for: date)
+            let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+            return pass.stamps.contains { $0.date >= startOfDay && $0.date < endOfDay }
+        }
+    }
+
+    private func formatTime(_ interval: TimeInterval) -> String {
+        let hours = Int(interval) / 3600
+        let minutes = Int(interval) % 3600 / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+
+    private func formatDuration(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval) / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        } else {
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
+        }
+    }
+
+    private func addDummyJourney() {
+        let allCompanies = store.fetchAllCompanies()
+        let company: RailCompany
+        if let existing = allCompanies.randomElement() {
+            company = existing
+        } else {
+            company = store.createCompany(name: "Debug Rail", cardText: "._.")
+        }
+
+        let startPlace = PlaceNames.randomPlace()
+        let endPlace = PlaceNames.randomPlace()
+        let miles = Double.random(in: 5...100)
+        let startTime = Date().addingTimeInterval(-Double.random(in: 0...86400 * 7))
+        let duration = Double.random(in: 600...7200)
+        let endTime = startTime.addingTimeInterval(duration)
+
+        let result = JourneyResult(
+            company: company,
+            miles: miles,
+            startTime: startTime,
+            endTime: endTime,
+            startPlace: startPlace.name,
+            endPlace: endPlace.name
+        )
+        store.completeJourney(result)
+        refreshData()
+    }
+
+    private func removeLastJourney() {
+        if let last = recentJourneys.first {
+            store.deleteJourney(last)
+            refreshData()
+        }
+    }
 }
 
-// MARK: - Recent journeys
-
-
-
-// MARK: - Passes
+// MARK: - Passes UI
 
 private struct HolographicPassBackground: View {
     @State private var animateGradient = false
-    
+
     private let holoColors: [Color] = [
-        Color(red: 0.55, green: 0.85, blue: 1.00), // ice blue
-        Color(red: 0.75, green: 0.60, blue: 1.00), // violet
-        Color(red: 1.00, green: 0.55, blue: 0.80), // pink
-        Color(red: 1.00, green: 0.80, blue: 0.55), // gold
-        Color(red: 0.55, green: 1.00, blue: 0.85), // mint
+        Color(red: 0.55, green: 0.85, blue: 1.00),
+        Color(red: 0.75, green: 0.60, blue: 1.00),
+        Color(red: 1.00, green: 0.55, blue: 0.80),
+        Color(red: 1.00, green: 0.80, blue: 0.55),
+        Color(red: 0.55, green: 1.00, blue: 0.85),
     ]
 
     var body: some View {
         ZStack {
             Color.black
 
-            
-
             GuillochePattern()
                 .stroke(Color.white.opacity(0.045), lineWidth: 1)
-            
+                .drawingGroup() // Isolated the drawing group away from the animated components
+
             LinearGradient(
                 colors: holoColors,
-                // Shift the gradient points based on the animation state
                 startPoint: animateGradient ? .topLeading : .bottomLeading,
                 endPoint: animateGradient ? .bottomTrailing : .topTrailing
             )
             .opacity(0.15)
             .blendMode(.normal)
-
             .hueRotation(.degrees(animateGradient ? 360 : 0))
 
             LinearGradient(
@@ -278,15 +486,12 @@ private struct HolographicPassBackground: View {
                 endPoint: .bottom
             )
         }
-        .drawingGroup()
-        .onAppear {
-
-            withAnimation(
-                .easeInOut(duration:4)
-                .repeatForever(autoreverses: true)
-            ) {
-                animateGradient = true
-            }
+                
+                .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animateGradient)
+                .onAppear {
+                    
+                    animateGradient = true
+                
         }
     }
 }
@@ -382,131 +587,74 @@ struct CommuterPassCard: View {
     }
 }
 
-enum CardBlockShape {
-    case circle
-    case square
-    case diagonal
-}
-
-enum CardBlockPosition {
-    case top
-    case bottom
-    case left
-    case right
-}
-
 struct PassCard: View {
     let title: String
+    let cardText: String
     let subtitle: String
-    
-
     let iconName: String
     let backgroundColor: Color
     let blockColor: Color
     let blockShape: CardBlockShape
     let blockPosition: CardBlockPosition
+    let fontColor: Color
+
+    private let cardWidth: CGFloat = 150
+    private let cardHeight: CGFloat = 110
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            backgroundColor
 
-            backgroundColor.opacity(0.7)
-            
+            let size = max(cardWidth, cardHeight)
 
-            GeometryReader { geo in
-   
-                let size = max(geo.size.width, geo.size.height)
+            Group {
+                switch blockShape {
+                case .circle:
+                    Circle().fill(blockColor)
+                case .square:
+                    Rectangle().fill(blockColor)
                 
-                Group {
-                    switch blockShape {
-                    case .circle:
-                        Circle().fill(blockColor.opacity(0.7))
-                    case .square:
-                        Rectangle().fill(blockColor.opacity(0.7))
-                    case .diagonal:
-                        Rectangle()
-                            .fill(blockColor.opacity(0.7))
-                            
-                            .rotationEffect(.degrees(0)
-                        
-                            )
-                    }
                 }
-                .frame(width: size, height: size)
-                .position(blockCoordinates(for: blockPosition, in: geo.size))
             }
+            .frame(width: size, height: size)
+            .position(blockCoordinates(for: blockPosition))
             .clipShape(RoundedRectangle(cornerRadius: 14))
-
-
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
-                
                     Spacer()
-                    
-
                     Image(systemName: "wave.3.forward")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white.opacity(0.9))
                 }
-                
-                Spacer()
-                
-                Text(title)
-                    .font(.system(size: 22,))
-                    .foregroundStyle(.white)
 
+                Spacer()
+
+                Text(cardText)
+                    .font(.system(size: 22))
+                    .foregroundStyle(fontColor)
             }
             .padding(12)
         }
-        .frame(width: 150, height: 110, alignment: .leading)
+        .frame(width: cardWidth, height: cardHeight, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
     }
-    
-    // Helper to calculate where to drop the shape based on the enum
-    private func blockCoordinates(for position: CardBlockPosition, in size: CGSize) -> CGPoint {
-        switch position {
-        case .top: return CGPoint(x: size.width / 2, y: 0)
-        case .bottom: return CGPoint(x: size.width / 2, y: size.height)
-        case .left: return CGPoint(x: 0, y: size.height / 2)
-        case .right: return CGPoint(x: size.width, y: size.height / 2)
-        }
-    }
-}
-// MARK: - Stubbook
 
-struct StubbookEntryCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("stubs")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    Stub(originCode: "FLS", destinationCode: "SMT", subtitle: "59m", operatorName: "EPQ")
-                    Stub(originCode: "SMT", destinationCode: "MHY", subtitle: "2h 15", operatorName: "Psychology")
-                    Stub(originCode: "PSR", destinationCode: "DRS", subtitle: "1h 12", operatorName: "Maths")
-                    
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 6)
-            }
+    private func blockCoordinates(for position: CardBlockPosition) -> CGPoint {
+        switch position {
+        case .top: return CGPoint(x: cardWidth / 2, y: 0)
+        case .bottom: return CGPoint(x: cardWidth / 2, y: cardHeight)
+        case .left: return CGPoint(x: 0, y: cardHeight / 2)
+        case .right: return CGPoint(x: cardWidth, y: cardHeight / 2)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(14)
     }
 }
+
+// MARK: - Stubs
 
 struct Stub: View {
     let originCode: String
@@ -514,26 +662,21 @@ struct Stub: View {
     let subtitle: String
     let operatorName: String
 
-    
     private var seedString: String { originCode + destinationCode + operatorName }
-    
+
     private var jitterDegrees: Double {
-      
         let hash = seedString.hashValue
         let normalized = Double(abs(hash) % 1200) / 100.0
         return -5.0 + normalized
     }
 
-    
-
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
-                
                 BarcodeShape(seed: seedString)
                     .frame(height: 18)
                     .foregroundStyle(.primary.opacity(0.65))
-                
+
                 HStack(spacing: 4) {
                     Text(originCode.uppercased())
                     Image(systemName: "arrow.right")
@@ -562,17 +705,15 @@ struct Stub: View {
     }
 }
 
-
 struct BarcodeShape: Shape {
     let seed: String
-    
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
         var generator = SeededGenerator(seed: seed)
         let spacing: CGFloat = 2
         var currentX: CGFloat = 0
-        
-        
+
         while currentX < rect.width {
             let w: CGFloat = Bool.random(using: &generator) ? 2 : 1
             if currentX + w > rect.width { break }
@@ -582,6 +723,8 @@ struct BarcodeShape: Shape {
         return path
     }
 }
+
+
 
 struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64
@@ -595,6 +738,3 @@ struct SeededGenerator: RandomNumberGenerator {
 }
 
 
-#Preview {
-    ContainerView()
-}

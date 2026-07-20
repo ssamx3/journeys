@@ -13,25 +13,53 @@ struct CreatePassView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
-    @State private var callSign = ""
+    @State private var cardText = ""
+
     @State private var backgroundColor: Color = .blue
     @State private var blockColor: Color = .pink
     @State private var blockShape: CardBlockShape = .circle
     @State private var blockPosition: CardBlockPosition = .bottom
+    @State private var fontColor: Color = .white
 
     var body: some View {
         NavigationStack {
             Form {
+                
+                
+                Section("Preview") {
+                    HStack {
+                        Spacer()
+                        PassCard(
+                            title: name,
+                            cardText: cardText,
+                            subtitle: "Bronze",
+                            iconName: "train.fill",
+                            backgroundColor: backgroundColor,
+                            blockColor: blockColor,
+                            blockShape: blockShape,
+                            blockPosition: blockPosition,
+                            fontColor: fontColor
+                        )
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
                 Section("Operator Details") {
                     TextField("Operator Name", text: $name)
-                    TextField("Call Sign (e.g. TSR)", text: $callSign)
-                        .textInputAutocapitalization(.characters)
-                        .limitLength($callSign, 3)
+                        .limitLength($name, 25)
+                        .submitLabel(.done)
                 }
+                
+                Section("RailPass Details") {
+                    TextField("Text displayed on RailPass", text: $cardText)
+                        .limitLength($cardText, 18)
+                        .submitLabel(.done)
+                
 
-                Section("Card Appearance") {
-                    ColorPicker("Background Color", selection: $backgroundColor)
-                    ColorPicker("Accent Color", selection: $blockColor)
+         
+                    ColorPicker("Background Color", selection: $backgroundColor, supportsOpacity: false)
+                    ColorPicker("Accent Color", selection: $blockColor, supportsOpacity: false)
+                    ColorPicker("Font Color", selection: $fontColor, supportsOpacity: false)
 
                     Picker("Shape", selection: $blockShape) {
                         ForEach(CardBlockShape.allCases, id: \.self) { shape in
@@ -46,24 +74,8 @@ struct CreatePassView: View {
                     }
                 }
 
-                Section("Preview") {
-                    HStack {
-                        Spacer()
-                        PassCard(
-                            title: name.isEmpty ? "Preview" : name,
-                            subtitle: "Bronze",
-                            iconName: "train.fill",
-                            backgroundColor: backgroundColor,
-                            blockColor: blockColor,
-                            blockShape: blockShape,
-                            blockPosition: blockPosition
-                        )
-                        Spacer()
-                    }
-                    .listRowBackground(Color.clear)
-                }
             }
-            .navigationTitle("New Pass")
+            .navigationTitle(name.isEmpty ? "New RailPass" : name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -73,7 +85,7 @@ struct CreatePassView: View {
                     Button("Save") {
                         savePass()
                     }
-                    .disabled(name.isEmpty || callSign.isEmpty)
+                    .disabled(name.isEmpty)
                 }
             }
         }
@@ -82,7 +94,7 @@ struct CreatePassView: View {
     private func savePass() {
         _ = store.createCompany(
             name: name,
-            callsign: callSign.uppercased(),
+            cardText: cardText,
             backgroundColorHex: backgroundColor.toHex(),
             blockColorHex: blockColor.toHex(),
             blockShapeRaw: blockShape.rawValue,
@@ -115,6 +127,7 @@ extension View {
 }
 
 #Preview {
-    // Preview requires a model context; in practice inject from parent
-    Text("Preview requires JourneyStore injection")
+    NavigationStack {
+        CreatePassView(store: .preview)
+    }
 }
