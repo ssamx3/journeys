@@ -8,9 +8,8 @@ final class RailCompany {
     var cardText: String
     var totalMiles: Double
     var totalTimeTravelled: Double
-    var level: RailPassLevel
 
-    // Pass card customization
+
     var backgroundColorHex: String
     var blockColorHex: String
     var blockShapeRaw: String
@@ -26,7 +25,6 @@ final class RailCompany {
         cardText: String,
         totalMiles: Double = 0,
         totalTimeTravelled: Double = 0,
-        level: RailPassLevel = .bronze,
         backgroundColorHex: String = "007AFF",
         blockColorHex: String = "FF2D55",
         blockShapeRaw: String = "circle",
@@ -37,7 +35,6 @@ final class RailCompany {
         self.cardText = cardText
         self.totalMiles = totalMiles
         self.totalTimeTravelled = totalTimeTravelled
-        self.level = level
         self.backgroundColorHex = backgroundColorHex
         self.blockColorHex = blockColorHex
         self.blockShapeRaw = blockShapeRaw
@@ -119,5 +116,43 @@ extension Color {
         let g = Float(max(0, min(1, components[1])))
         let b = Float(max(0, min(1, components[2])))
         return String(format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
+    }
+}
+
+extension RailCompany {
+
+
+    private static let tierThresholds: [(level: RailPassLevel, milesRequired: Double)] = [
+        (.silver, 500), (.gold, 1000), (.platinum, 2000), (.titanium, 5000)
+    ]
+
+    private static let allTierFloors: [(level: RailPassLevel, floor: Double)] = [
+        (.bronze, 0), (.silver, 500), (.gold, 1000), (.platinum, 2000), (.titanium, 5000)
+    ]
+
+
+    var level: RailPassLevel {
+        RailCompany.allTierFloors.last(where: { totalMiles >= $0.floor })?.level ?? .bronze
+    }
+
+    var nextTier: RailPassLevel? {
+        RailCompany.tierThresholds.first(where: { totalMiles < $0.milesRequired })?.level
+    }
+
+    var milesToNextTier: Double {
+        guard let next = RailCompany.tierThresholds.first(where: { totalMiles < $0.milesRequired }) else { return 0 }
+        return max(0, next.milesRequired - totalMiles)
+    }
+
+    private var currentTierFloor: Double {
+        RailCompany.allTierFloors.last(where: { totalMiles >= $0.floor })?.floor ?? 0
+    }
+
+    var tierProgress: Double {
+        guard let next = RailCompany.tierThresholds.first(where: { totalMiles < $0.milesRequired }) else { return 1 }
+        let floor = currentTierFloor
+        let range = next.milesRequired - floor
+        guard range > 0 else { return 1 }
+        return min(1, max(0, (totalMiles - floor) / range))
     }
 }

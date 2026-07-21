@@ -10,29 +10,41 @@ import SwiftData
 
 struct CreatePassView: View {
     let store: JourneyStore
+    var company: RailCompany?
+
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name = ""
-    @State private var cardText = ""
+    @State private var name: String
+    @State private var cardText: String
 
-    @State private var backgroundColor: Color = .blue
-    @State private var blockColor: Color = .pink
-    @State private var blockShape: CardBlockShape = .circle
-    @State private var blockPosition: CardBlockPosition = .bottom
-    @State private var fontColor: Color = .white
+    @State private var backgroundColor: Color
+    @State private var blockColor: Color
+    @State private var blockShape: CardBlockShape
+    @State private var blockPosition: CardBlockPosition
+    @State private var fontColor: Color
+
+    init(store: JourneyStore, company: RailCompany? = nil) {
+        self.store = store
+        self.company = company
+        _name = State(initialValue: company?.name ?? "")
+        _cardText = State(initialValue: company?.cardText ?? "")
+        _backgroundColor = State(initialValue: company?.backgroundColor ?? .blue)
+        _blockColor = State(initialValue: company?.blockColor ?? .pink)
+        _blockShape = State(initialValue: company?.blockShape ?? .circle)
+        _blockPosition = State(initialValue: company?.blockPosition ?? .bottom)
+        _fontColor = State(initialValue: company?.fontColor ?? .white)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                
-                
                 Section("Preview") {
                     HStack {
                         Spacer()
                         PassCard(
                             title: name,
                             cardText: cardText,
-                            subtitle: "Bronze",
+                            subtitle: company?.level.rawValue.capitalized ?? "Bronze",
                             iconName: "train.fill",
                             backgroundColor: backgroundColor,
                             blockColor: blockColor,
@@ -49,14 +61,12 @@ struct CreatePassView: View {
                         .limitLength($name, 25)
                         .submitLabel(.done)
                 }
-                
+
                 Section("RailPass Details") {
                     TextField("Text displayed on RailPass", text: $cardText)
                         .limitLength($cardText, 18)
                         .submitLabel(.done)
-                
 
-         
                     ColorPicker("Background Color", selection: $backgroundColor, supportsOpacity: false)
                     ColorPicker("Accent Color", selection: $blockColor, supportsOpacity: false)
                     ColorPicker("Font Color", selection: $fontColor, supportsOpacity: false)
@@ -75,7 +85,7 @@ struct CreatePassView: View {
                 }
 
             }
-            .navigationTitle(name.isEmpty ? "New RailPass" : name)
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -91,15 +101,31 @@ struct CreatePassView: View {
         }
     }
 
+    private var navigationTitle: String {
+        if !name.isEmpty { return name }
+        return company == nil ? "New RailPass" : "Edit RailPass"
+    }
+
     private func savePass() {
-        _ = store.createCompany(
-            name: name,
-            cardText: cardText,
-            backgroundColorHex: backgroundColor.toHex(),
-            blockColorHex: blockColor.toHex(),
-            blockShapeRaw: blockShape.rawValue,
-            blockPositionRaw: blockPosition.rawValue
-        )
+        if let company = company {
+            company.name = name
+            company.cardText = cardText
+            company.backgroundColorHex = backgroundColor.toHex()
+            company.blockColorHex = blockColor.toHex()
+            company.blockShapeRaw = blockShape.rawValue
+            company.blockPositionRaw = blockPosition.rawValue
+            company.fontColorHex = fontColor.toHex()
+        } else {
+            _ = store.createCompany(
+                name: name,
+                cardText: cardText,
+                backgroundColorHex: backgroundColor.toHex(),
+                blockColorHex: blockColor.toHex(),
+                blockShapeRaw: blockShape.rawValue,
+                blockPositionRaw: blockPosition.rawValue,
+                fontColorHex: fontColor.toHex()
+            )
+        }
         dismiss()
     }
 }

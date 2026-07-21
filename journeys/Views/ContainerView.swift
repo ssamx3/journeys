@@ -18,48 +18,68 @@ struct ContainerView: View {
     @State private var companies: [RailCompany] = []
     @State private var recentJourneys: [Journey] = []
     @State private var commuterPass: CommuterPass?
-    
-    // Extracted stats to prevent main thread rendering lag
+
+
     @State private var statsSnapshot = StatsSnapshot(miles: 0, timeLabel: "0m", topOperator: "-", personalBestMiles: 0)
+
+    @Namespace private var heroNamespace
+    @State private var selectedCompany: RailCompany?
+    @State private var selectedCompanyJourneys: [Journey] = []
 
     private let currentStation = "Folsense Station"
 
     var body: some View {
         NavigationStack {
             ZStack {
-
                 Color(.systemGroupedBackground)
                     .ignoresSafeArea()
 
-
                 ScrollView(showsIndicators: false) {
-
                     LazyVStack(alignment: .leading, spacing: 12) {
                         heroCard
-
                         passesCard
-
+                        
                         stubsCard
                             .contentShape(RoundedRectangle(cornerRadius: 16))
                             .onTapGesture { showingStubBook = true }
 
                         statsCard
-
                         debugCard
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                
+                if let company = selectedCompany {
+                    RailCompanyView(store: store, company: company, selectedCompany: $selectedCompany, journeys: selectedCompanyJourneys)
+                        .zIndex(2)
+                    
+                
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showingStubBook) { StubBookView() }
-            .sheet(isPresented: $showingCreatePass, onDismiss: refreshData) {
+            .sheet(isPresented: $showingCreatePass) {
                 CreatePassView(store: store)
             }
+            .onChange(of: showingCreatePass) { _, isShowing in
+                if !isShowing {
+                    selectedCompany = nil
+                    selectedCompanyJourneys = []
+                    refreshData()
+                }
+            }
+
             .onAppear(perform: refreshData)
             .onChange(of: statsRange) { _, _ in
                 updateStats()
+            }
+            .onChange(of: selectedCompany) { _, newValue in
+
+                if newValue == nil {
+                    refreshData()
+                }
             }
         }
     }
@@ -77,7 +97,7 @@ struct ContainerView: View {
         let calendar = Calendar.current
         let now = Date()
         let startDate: Date
-        
+
         switch statsRange {
         case .week:
             startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
@@ -86,9 +106,9 @@ struct ContainerView: View {
         case .year:
             startDate = calendar.date(byAdding: .day, value: -365, to: now) ?? now
         }
-        
+
         let journeys = store.fetchJourneys(from: startDate)
-        
+
         let totalMiles = journeys.reduce(0) { $0 + $1.miles }
         let totalTime = journeys.reduce(0) { $0 + $1.endTime.timeIntervalSince($1.startTime) }
 
@@ -98,12 +118,14 @@ struct ContainerView: View {
 
         let personalBest = journeys.map(\.miles).max() ?? 0
 
-        statsSnapshot = StatsSnapshot(
-            miles: Int(totalMiles),
-            timeLabel: formatTime(totalTime),
-            topOperator: topOperator,
-            personalBestMiles: Int(personalBest)
-        )
+        withAnimation(.easeOut(duration: 0.8)) {
+            statsSnapshot = StatsSnapshot(
+                miles: Int(totalMiles),
+                timeLabel: formatTime(totalTime),
+                topOperator: topOperator,
+                personalBestMiles: Int(personalBest)
+            )
+        }
     }
 
     // MARK: - Sections
@@ -158,14 +180,14 @@ struct ContainerView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 // Swapped HStack for LazyHStack
-                LazyHStack(spacing: 12) {
+                HStack(spacing: 12) {
                     if let pass = commuterPass {
                         CommuterPassCard(
                             streak: pass.streakWeeks,
                             stampedDays: stampedDays(for: pass)
                         )
                     }
-
+                    
                     ForEach(companies) { company in
                         PassCard(
                             title: company.name,
@@ -178,15 +200,25 @@ struct ContainerView: View {
                             blockPosition: company.blockPosition,
                             fontColor: company.fontColor
                         )
+                        .matchedGeometryEffect(id: company.persistentModelID, in: heroNamespace)
+                        .onTapGesture {
+                            let journeys = store.fetchJourneys(for: company)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                selectedCompany = company
+                            }
+                            selectedCompanyJourneys = journeys
+                        }
                     }
                 }
                 .padding(.vertical, 4)
             }
+            
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(14)
+        .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color(.secondarySystemGroupedBackground)))
     }
 
     private var stubsCard: some View {
@@ -286,6 +318,18 @@ struct ContainerView: View {
                         .foregroundStyle(.red)
                         .clipShape(Capsule())
                 }
+
+                Button {
+                    resetAllJourneys()
+                } label: {
+                    Label("Reset All", systemImage: "trash.slash")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.red.opacity(0.25))
+                        .foregroundStyle(.red)
+                        .clipShape(Capsule())
+                }
             }
         }
         .padding()
@@ -340,30 +384,6 @@ struct ContainerView: View {
             .padding(3)
             .background(Color(.tertiarySystemFill))
             .clipShape(Capsule())
-        }
-    }
-
-    private struct StatTile: View {
-        let value: String
-        let label: String
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Spacer()
-                Text(value)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.tertiarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -441,11 +461,18 @@ struct ContainerView: View {
             refreshData()
         }
     }
+
+    private func resetAllJourneys() {
+        store.deleteAllJourneys()
+        refreshData()
+    }
+    
+   
 }
 
 // MARK: - Passes UI
 
-private struct HolographicPassBackground: View {
+struct HolographicPassBackground: View {
     @State private var animateGradient = false
 
     private let holoColors: [Color] = [
@@ -462,7 +489,7 @@ private struct HolographicPassBackground: View {
 
             GuillochePattern()
                 .stroke(Color.white.opacity(0.045), lineWidth: 1)
-                .drawingGroup() // Isolated the drawing group away from the animated components
+                .drawingGroup()
 
             LinearGradient(
                 colors: holoColors,
@@ -486,17 +513,17 @@ private struct HolographicPassBackground: View {
                 endPoint: .bottom
             )
         }
-                
+
                 .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animateGradient)
                 .onAppear {
-                    
+
                     animateGradient = true
-                
+
         }
     }
 }
 
-private struct GuillochePattern: Shape {
+struct GuillochePattern: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let spacing: CGFloat = 12
@@ -598,14 +625,14 @@ struct PassCard: View {
     let blockPosition: CardBlockPosition
     let fontColor: Color
 
-    private let cardWidth: CGFloat = 150
-    private let cardHeight: CGFloat = 110
+    var width: CGFloat = 150
+    var height: CGFloat = 110
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             backgroundColor
 
-            let size = max(cardWidth, cardHeight)
+            let size = max(width, height)
 
             Group {
                 switch blockShape {
@@ -613,7 +640,7 @@ struct PassCard: View {
                     Circle().fill(blockColor)
                 case .square:
                     Rectangle().fill(blockColor)
-                
+
                 }
             }
             .frame(width: size, height: size)
@@ -636,20 +663,22 @@ struct PassCard: View {
             }
             .padding(12)
         }
-        .frame(width: cardWidth, height: cardHeight, alignment: .leading)
+        .frame(width: width, height: height, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
+      //  .compositingGroup()
+        //   .drawingGroup()
     }
 
     private func blockCoordinates(for position: CardBlockPosition) -> CGPoint {
         switch position {
-        case .top: return CGPoint(x: cardWidth / 2, y: 0)
-        case .bottom: return CGPoint(x: cardWidth / 2, y: cardHeight)
-        case .left: return CGPoint(x: 0, y: cardHeight / 2)
-        case .right: return CGPoint(x: cardWidth, y: cardHeight / 2)
+        case .top: return CGPoint(x: width / 2, y: 0)
+        case .bottom: return CGPoint(x: width / 2, y: height)
+        case .left: return CGPoint(x: 0, y: height / 2)
+        case .right: return CGPoint(x: width, y: height / 2)
         }
     }
 }
@@ -737,4 +766,26 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
+struct StatTile: View {
+    let value: String
+    let label: String
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Spacer()
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}

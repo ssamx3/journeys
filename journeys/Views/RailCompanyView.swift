@@ -1,100 +1,131 @@
-//
-//  RailCompanyView.swift
-//  journeys
-//
-
 import SwiftUI
 import SwiftData
 
 struct RailCompanyView: View {
     let store: JourneyStore
     let company: RailCompany
-    var namespace: Namespace.ID
+    @Binding var selectedCompany: RailCompany?
 
-    @Environment(\.dismiss) private var dismiss
+    @State private var appearPhase: Double = 0
+    @State private var revealValues = false
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
 
-    // Animated stat values
-    @State private var animatedMiles: Double = 0
-    @State private var animatedTime: TimeInterval = 0
-    @State private var animatedJourneys: Int = 0
-    @State private var hasAppeared = false
-
-    private var journeys: [Journey] {
-        store.fetchJourneys(for: company)
-    }
+    let journeys: [Journey]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+        ZStack {
+            // Background materializes
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+                .opacity(appearPhase)
 
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        heroSection
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Close button
+                    HStack {
+                        Spacer()
+                        Button { closeView() } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title)
+                                .foregroundStyle(.white)
+                                .symbolRenderingMode(.hierarchical)
+                                
+                        }
+                        .opacity(appearPhase)
+                        .offset(y: -4 * (1 - appearPhase))
+                    }
+
+
+                    heroSection
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+
+                    VStack(alignment: .leading, spacing: 16) {
                         statsSection
                         journeysSection
                         actionsSection
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 40)
+                    .opacity(appearPhase)
+                    .offset(y: 16 * (1 - appearPhase))
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 60)
+            }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            CreatePassView(store: store, company: company)
+        }
+        .alert("Delete \(company.name)?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                store.deleteCompany(company)
+                closeView()
+            }
+        } message: {
+            Text("This will permanently delete this RailPass and all associated journeys.")
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                appearPhase = 1
+            }
+  
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    revealValues = true
                 }
             }
-            .navigationTitle(company.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .sheet(isPresented: $showingEditSheet, onDismiss: animateStatsIn) {
-                CreatePassView(store: store, company: company)
-            }
-            .alert("Delete \(company.name)?", isPresented: $showingDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    store.deleteCompany(company)
-                    dismiss()
-                }
-            } message: {
-                Text("This will permanently delete this RailPass and all associated journeys.")
-            }
-            .onAppear(perform: animateStatsIn)
+        }
+    }
+
+    private func closeView() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            appearPhase = 0
+            revealValues = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            selectedCompany = nil
         }
     }
 
     // MARK: - Sections
 
     private var heroSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PassCard(
-                title: company.name,
-                cardText: company.cardText,
-                subtitle: company.level.rawValue.capitalized,
-                iconName: "train.fill",
-                backgroundColor: company.backgroundColor,
-                blockColor: company.blockColor,
-                blockShape: company.blockShape,
-                blockPosition: company.blockPosition,
-                fontColor: company.fontColor,
-                width: UIScreen.main.bounds.width - 64,
-                height: 140
-            )
-            .matchedGeometryEffect(id: company.persistentModelID, in: namespace)
+        VStack(spacing: 10) {
+            ZStack {
 
-            HStack {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(company.level.themeColor)
-                Text("\(company.level.rawValue.capitalized) Tier")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
+                Circle()
+                    .fill(company.backgroundColor)
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 70)
+                    .opacity(0.35)
+
+                PassCard(
+                    title: company.name,
+                    cardText: company.cardText,
+                    subtitle: company.level.rawValue.capitalized,
+                    iconName: "train.fill",
+                    backgroundColor: company.backgroundColor,
+                    blockColor: company.blockColor,
+                    blockShape: company.blockShape,
+                    blockPosition: company.blockPosition,
+                    fontColor: company.fontColor
+                )
+                .frame(width: 180, height: 130)
             }
-            .padding(.horizontal, 4)
+            .scaleEffect(0.88 + (0.12 * appearPhase))
+            .opacity(appearPhase)
+
+            VStack(spacing: 2) {
+                Text(company.name)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                Text(company.level.rawValue.capitalized)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .opacity(appearPhase)
+            .offset(y: 6 * (1 - appearPhase))
         }
-        .padding(.top)
     }
 
     private var statsSection: some View {
@@ -106,24 +137,35 @@ struct RailCompanyView: View {
 
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    StatTile(
-                        value: hasAppeared ? "\(Int(animatedMiles))" : "0",
+                    StatTile2(
+                        value: revealValues ? "\(Int(company.totalMiles))" : "0",
                         label: "miles travelled"
                     )
-                    StatTile(
-                        value: hasAppeared ? formatTime(animatedTime) : "0m",
+                    StatTile2(
+                        value: revealValues ? formatTime(company.totalTimeTravelled) : "0m",
                         label: "time spent"
                     )
                 }
                 HStack(spacing: 10) {
-                    StatTile(
-                        value: hasAppeared ? "\(animatedJourneys)" : "0",
+                    StatTile2(
+                        value: revealValues ? "\(journeys.count)" : "0",
                         label: "journeys taken"
                     )
-                    StatTile(
-                        value: company.level.rawValue.capitalized,
-                        label: "loyalty level"
-                    )
+
+                    if let next = company.nextTier {
+                        StatTile2(
+                            value: revealValues ? "\(Int(company.milesToNextTier))" : "0",
+                            label: "mi to \(next.rawValue.capitalized)",
+                            progress: revealValues ? company.tierProgress : 0,
+                            tint: next.themeColor
+                        )
+                    } else {
+                        StatTile2(
+                            value: "Max",
+                            label: "tier reached",
+                            tint: company.level.themeColor
+                        )
+                    }
                 }
             }
         }
@@ -172,16 +214,12 @@ struct RailCompanyView: View {
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 10) {
-                Button {
-                    showingEditSheet = true
-                } label: {
+                Button { showingEditSheet = true } label: {
                     HStack {
                         Image(systemName: "pencil")
                         Text("Edit RailPass")
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     }
                     .padding()
                     .foregroundStyle(.primary)
@@ -189,16 +227,12 @@ struct RailCompanyView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
-                Button {
-                    showingDeleteConfirmation = true
-                } label: {
+                Button { showingDeleteConfirmation = true } label: {
                     HStack {
                         Image(systemName: "trash")
                         Text("Delete RailPass")
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     }
                     .padding()
                     .foregroundStyle(.red)
@@ -213,41 +247,58 @@ struct RailCompanyView: View {
         .cornerRadius(14)
     }
 
-    // MARK: - Animation
-
-    private func animateStatsIn() {
-        let targetMiles = company.totalMiles
-        let targetTime = company.totalTimeTravelled
-        let targetJourneys = journeys.count
-
-        animatedMiles = 0
-        animatedTime = 0
-        animatedJourneys = 0
-        hasAppeared = false
-
-        withAnimation(.easeOut(duration: 1.2)) {
-            animatedMiles = targetMiles
-            animatedTime = targetTime
-            animatedJourneys = targetJourneys
-            hasAppeared = true
-        }
-    }
-
-    // MARK: - Helpers
-
     private func formatTime(_ interval: TimeInterval) -> String {
         let hours = Int(interval) / 3600
         let minutes = Int(interval) % 3600 / 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else {
-            return "\(minutes)m"
+        if hours > 0 { return "\(hours)h \(minutes)m" } else { return "\(minutes)m" }
+    }
+}
+
+// MARK: - Stat Tile
+struct StatTile2: View {
+    let value: String
+    let label: String
+    var progress: Double? = nil
+    var tint: Color = .pink
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Spacer()
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: value)
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            if let progress {
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.15))
+
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(tint)
+                            .frame(width: max(4, geo.size.width * progress))
+                    }
+                }
+                .frame(height: 4)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
+                .padding(.top, 2)
+            }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
 // MARK: - Journey Row
-
 private struct JourneyRow: View {
     let journey: Journey
 
@@ -263,14 +314,11 @@ private struct JourneyRow: View {
                     Text(PlaceNames.byName[journey.endPlace]?.code ?? "UNK")
                         .font(.system(.subheadline).weight(.bold))
                 }
-
                 Text(formatDuration(journey.endTime.timeIntervalSince(journey.startTime)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
             Spacer()
-
             Text("\(Int(journey.miles)) mi")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -280,9 +328,7 @@ private struct JourneyRow: View {
 
     private func formatDuration(_ interval: TimeInterval) -> String {
         let minutes = Int(interval) / 60
-        if minutes < 60 {
-            return "\(minutes)m"
-        } else {
+        if minutes < 60 { return "\(minutes)m" } else {
             let hours = minutes / 60
             let mins = minutes % 60
             return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
@@ -291,7 +337,6 @@ private struct JourneyRow: View {
 }
 
 // MARK: - Level Theme Color
-
 extension RailPassLevel {
     var themeColor: Color {
         switch self {

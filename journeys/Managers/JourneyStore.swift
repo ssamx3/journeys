@@ -23,7 +23,7 @@ final class JourneyStore {
         context.insert(journey)
         result.company.totalMiles += result.miles
         result.company.totalTimeTravelled += result.endTime.timeIntervalSince(result.startTime)
-        result.company.level = level(forTotalMiles: result.company.totalMiles)
+
 
         let duration = result.endTime.timeIntervalSince(result.startTime)
         if duration >= 20 * 60 {
@@ -34,7 +34,7 @@ final class JourneyStore {
     func deleteJourney(_ journey: Journey) {
         journey.company.totalMiles -= journey.miles
         journey.company.totalTimeTravelled -= journey.endTime.timeIntervalSince(journey.startTime)
-        journey.company.level = level(forTotalMiles: journey.company.totalMiles)
+
         context.delete(journey)
     }
 
@@ -79,7 +79,6 @@ final class JourneyStore {
             cardText: cardText,
             totalMiles: 0,
             totalTimeTravelled: 0,
-            level: .bronze,
             backgroundColorHex: backgroundColorHex,
             blockColorHex: blockColorHex,
             blockShapeRaw: blockShapeRaw,
@@ -154,13 +153,15 @@ final class JourneyStore {
         return (pass.stampsLast7Days, pass.streakWeeks, pass.milestone)
     }
 
-    private func level(forTotalMiles miles: Double) -> RailPassLevel {
-        switch miles {
-        case ..<50:      return .bronze
-        case 50..<150:   return .silver
-        case 150..<350:  return .gold
-        case 350..<700:  return .platinum
-        default:         return .titanium
+
+    func deleteAllJourneys() {
+        let allJourneys = (try? context.fetch(FetchDescriptor<Journey>())) ?? []
+        for journey in allJourneys {
+            context.delete(journey)
+        }
+        for company in fetchAllCompanies() {
+            company.totalMiles = 0
+            company.totalTimeTravelled = 0
         }
     }
 }
