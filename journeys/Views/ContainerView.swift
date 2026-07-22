@@ -14,6 +14,7 @@ struct ContainerView: View {
     @State private var showingStubBook = false
     @State private var showingCreatePass = false
     @State private var statsRange: StatsRange = .week
+    @State private var showingTicketFlow = false
 
     @State private var companies: [RailCompany] = []
     @State private var recentJourneys: [Journey] = []
@@ -63,6 +64,12 @@ struct ContainerView: View {
             .sheet(isPresented: $showingCreatePass) {
                 CreatePassView(store: store)
             }
+            
+            .sheet(isPresented: $showingTicketFlow) {
+                TicketFlowView(store: store)
+            }
+            
+            
             .onChange(of: showingCreatePass) { _, isShowing in
                 if !isShowing {
                     selectedCompany = nil
@@ -142,7 +149,7 @@ struct ContainerView: View {
                 }
 
                 Button {
-                    // get tickets action
+                    showingTicketFlow = true
                 } label: {
                     HStack {
                         Text("Get tickets")
