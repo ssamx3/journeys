@@ -1,20 +1,20 @@
 //
-//  TicketFlowView.swift
+//  TicketView.swift
 //  journeys
-//
-//  Created by sam on 20/07/2026.
 //
 
 import SwiftUI
 import SwiftData
 
-// MARK: - Main Flow Container
+// MARK: - Root
 
-struct TicketFlowView: View {
-    @Environment(\.dismiss) private var dismiss
+struct TicketView: View {
     let store: JourneyStore
+    @Binding var isPresented: Bool
 
-    @State private var path: [FlowStep] = []
+    @State private var appearPhase: Double = 0
+    @State private var step: FlowStep = .duration
+
     @State private var duration: Double = 15
     @State private var isIndefinite: Bool = false
     @State private var selectedCompany: RailCompany?
@@ -25,75 +25,64 @@ struct TicketFlowView: View {
     private let minDuration: Double = 15
     private let maxDuration: Double = 180
 
-    /// Only the *pushed* screens live in the nav path — duration is the root.
-    enum FlowStep: Int, Hashable {
-        case operatorSelect
+    enum FlowStep: Int, CaseIterable {
+        case duration
+        case `operator`
         case ticket
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            DurationStepView(
-                origin: origin,
-                destination: destination,
-                duration: $duration,
-                isIndefinite: $isIndefinite,
-                minDuration: minDuration,
-                maxDuration: maxDuration
-            )
-            .navigationTitle("Plan Journey")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { closeToolbarItem }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                FlowStepHeader(current: 0, subtitle: subtitleForDuration)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                FlowActionBar(title: "Next") {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    path.append(.operatorSelect)
-                }
-            }
-            .navigationDestination(for: FlowStep.self) { step in
-                switch step {
-                case .operatorSelect:
-                    OperatorStepView(store: store, selectedCompany: $selectedCompany)
-                        .navigationTitle("Select Operator")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar { closeToolbarItem }
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            FlowStepHeader(
-                                current: 1,
-                                subtitle: selectedCompany?.name ?? "Choose an operator"
-                            )
-                        }
-                        .safeAreaInset(edge: .bottom, spacing: 0) {
-                            FlowActionBar(title: "Review Ticket", isDisabled: selectedCompany == nil) {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                path.append(.ticket)
-                            }
-                        }
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+                .opacity(appearPhase)
 
-                case .ticket:
-                    TicketStepView(
-                        origin: origin,
-                        destination: destination,
-                        company: selectedCompany,
-                        duration: duration,
-                        isIndefinite: isIndefinite
-                    )
-                    .navigationTitle("Your Ticket")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { closeToolbarItem }
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        FlowStepHeader(current: 2, subtitle: "Ready to depart")
-                    }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        FlowActionBar(title: "Begin Journey", showsArrow: false) {
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            dismiss()
-                        }
+            VStack(spacing: 0) {
+                topBar
+
+                
+
+                ZStack {
+                    switch step {
+                    case .duration:
+                        DurationStepView(
+                            origin: origin,
+                            destination: destination,
+                            duration: $duration,
+                            isIndefinite: $isIndefinite,
+                            minDuration: minDuration,
+                            maxDuration: maxDuration
+                        )
+                        .transition(stepTransition)
+
+                    case .operator:
+                        OperatorStepView(store: store, selectedCompany: $selectedCompany)
+                            .transition(stepTransition)
+
+                    case .ticket:
+                        TicketStepView(
+                            origin: origin,
+                            destination: destination,
+                            company: selectedCompany,
+                            duration: duration,
+                            isIndefinite: isIndefinite
+                        )
+                        .transition(stepTransition)
                     }
                 }
+                .frame(maxHeight: .infinity)
+                .opacity(appearPhase)
+                .offset(y: 16 * (1 - appearPhase))
+
+                FlowActionBar(
+                    title: actionTitle,
+                    showsArrow: step != .ticket,
+                    isDisabled: step == .operator && selectedCompany == nil
+                ) {
+                    advance()
+                }
+                .opacity(appearPhase)
+                
             }
         }
         .onChange(of: duration) { _, newValue in
@@ -101,32 +90,115 @@ struct TicketFlowView: View {
         }
         .onAppear {
             updateJourneyEstimate(duration: duration)
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                appearPhase = 1
+            }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(20)
-        .presentationBackground(Color(.systemGroupedBackground))
     }
 
-    @ToolbarContentBuilder
-    private var closeToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                dismiss()
-            } label: {
+    // MARK: - Top bar
+
+    private var topBar: some View {
+        HStack {
+            if step != .duration {
+                Button { goBack() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(Circle())
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            } else {
+                Spacer().frame(width: 30, height: 30)
+            }
+            Spacer()
+            FlowStepHeader(current: step.rawValue)
+                .opacity(appearPhase)
+                .offset(y: 8 * (1 - appearPhase))
+
+            Spacer()
+
+            Button { closeView() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Color(.tertiarySystemFill))
                     .clipShape(Circle())
             }
         }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .opacity(appearPhase)
+        .offset(y: -4 * (1 - appearPhase))
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: step)
     }
 
-    private var subtitleForDuration: String {
-        isIndefinite ? "Indefinite mode" : formatDurationLabel(duration)
+    private var stepTransition: AnyTransition {
+        .asymmetric(
+            insertion: .offset(x: 24).combined(with: .opacity),
+            removal: .offset(x: -24).combined(with: .opacity)
+        )
     }
+
+    // MARK: - Copy
+
+
+    private var actionTitle: String {
+        switch step {
+        case .duration: return "Next"
+        case .operator: return "Review Ticket"
+        case .ticket: return "Begin Journey"
+        }
+    }
+
+    // MARK: - Navigation
+
+    private func advance() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        switch step {
+        case .duration:
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                step = .operator
+            }
+        case .operator:
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                step = .ticket
+            }
+        case .ticket:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            closeView()
+        }
+    }
+
+    private func goBack() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            switch step {
+            case .duration: break
+            case .operator: step = .duration
+            case .ticket: step = .operator
+            }
+        }
+    }
+
+    private func closeView() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            appearPhase = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            isPresented = false
+            // Reset for next time this is opened fresh.
+            step = .duration
+            duration = 15
+            isIndefinite = false
+            selectedCompany = nil
+        }
+    }
+
+    // MARK: - Estimation
 
     private func updateJourneyEstimate(duration: Double) {
         if duration < minDuration {
@@ -156,10 +228,10 @@ struct TicketFlowView: View {
 
 // MARK: - Shared Flow Chrome
 
-/// Progress dots + a short status line, pinned under the native nav bar.
+/// Progress dots + a short status line.
 private struct FlowStepHeader: View {
     let current: Int
-    let subtitle: String
+
     private let totalSteps = 3
 
     var body: some View {
@@ -172,21 +244,13 @@ private struct FlowStepHeader: View {
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: current)
-
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: subtitle)
+            
+            
         }
-        .padding(.top, 8)
-        .padding(.bottom, 14)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGroupedBackground))
     }
 }
 
-/// A single, consistently-styled call to action pinned to the bottom of every step.
+
 private struct FlowActionBar: View {
     let title: String
     var showsArrow: Bool = true
@@ -198,6 +262,7 @@ private struct FlowActionBar: View {
             HStack(spacing: 8) {
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
+                    .contentTransition(.opacity)
 
                 if showsArrow {
                     Image(systemName: "arrow.right")
@@ -212,14 +277,14 @@ private struct FlowActionBar: View {
         }
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1)
+        .animation(.easeInOut(duration: 0.2), value: title)
         .padding(.horizontal)
         .padding(.top, 12)
-        .padding(.bottom, 12)
-        .background(.bar)
+        .padding(.bottom, 8)
     }
 }
 
-// MARK: - Step 1: Duration Selection
+// MARK: - Step 1: Duration Selection (Polished)
 
 private struct DurationStepView: View {
     let origin: Place
@@ -229,80 +294,101 @@ private struct DurationStepView: View {
     let minDuration: Double
     let maxDuration: Double
 
+    @State private var appearPhase: Double = 0
+
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 20) {
-                Spacer().frame(height: 20)
+            Spacer(minLength: 0)
 
-                HStack(spacing: 16) {
-                    VStack(spacing: 4) {
-                        Text(origin.code)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+            // Main focus: duration in minutes
+            VStack(spacing: 4) {
+                
+                Text("How long is your journey?")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if isIndefinite {
+                        Text("Indefinite")
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
-                        Text(origin.name)
-                            .font(.caption)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .center)))
+                    } else {
+                        Text("\(Int(duration))")
+                            .font(.system(size: 72, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .contentTransition(.numericText())
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .center)))
+
+                        Text("min")
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
-                    }
-
-                    ZStack {
-                        Capsule()
-                            .fill(Color(.tertiarySystemFill))
-                            .frame(width: 60, height: 32)
-
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(spacing: 4) {
-                        if isIndefinite {
-                            Text("???")
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                        } else if let dest = destination {
-                            Text(dest.code)
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            Text(dest.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .center)))
                     }
                 }
-                .frame(height: 90)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: duration)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isIndefinite)
+                .onChange(of: duration) { _, newValue in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isIndefinite = newValue < minDuration
+                    }
+                }
 
-                MetricBadge(
-                    value: isIndefinite ? "∞" : formatDuration(duration),
-                    label: "duration",
-                    icon: "clock.fill"
-                )
+                // Route info below, smaller and secondary
+                HStack(spacing: 8) {
+                    Text(origin.code)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
 
-                Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .contentTransition(.symbolEffect(.replace))
+
+                    if isIndefinite {
+                        Text("???")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    } else if let dest = destination {
+                        Text(dest.code)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 8)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: destination?.code)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isIndefinite)
             }
-            .padding(.horizontal)
 
+            Spacer(minLength: 0)
+
+            // Native slider at bottom
             VStack(spacing: 12) {
-                TactileDurationSlider(
+                Slider(
                     value: $duration,
-                    isIndefinite: $isIndefinite,
-                    minDuration: minDuration,
-                    maxDuration: maxDuration
+                    in: 0...maxDuration
                 )
-                .frame(height: 60)
-                .padding(.horizontal, 24)
+                .tint(isIndefinite ? Color.secondary.opacity(0.4) : Color.secondary.opacity(1))
+                .frame(height: 32)
+
+
+                .padding(.horizontal, 4)
             }
-            .padding(.bottom, 20)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+        .opacity(appearPhase)
+        .offset(y: 10 * (1 - appearPhase))
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                appearPhase = 1
+            }
+        }
+        .onChange(of: duration) { _, newValue in
+            isIndefinite = newValue < minDuration
         }
     }
-
-    private func formatDuration(_ minutes: Double) -> String {
-        let hrs = Int(minutes) / 60
-        let mins = Int(minutes) % 60
-        if hrs > 0 { return mins > 0 ? "\(hrs)h \(mins)m" : "\(hrs)h" }
-        return "\(mins)m"
-    }
 }
-
 // MARK: - Step 2: Operator Selection
 
 private struct OperatorStepView: View {
@@ -313,10 +399,13 @@ private struct OperatorStepView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Select your rail operator")
-                .font(.title2.weight(.bold))
+            Text("Who are you travelling with?")
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.top, 4)
+                .padding(.bottom, 16)
 
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 12) {
@@ -375,99 +464,6 @@ private struct TicketStepView: View {
 
 // MARK: - Tactile Scrubber Slider
 
-private struct TactileDurationSlider: View {
-    @Binding var value: Double
-    @Binding var isIndefinite: Bool
-    let minDuration: Double
-    let maxDuration: Double
-
-    private let barCount = 48
-    private let barWidth: CGFloat = 1.5
-    private let barGap: CGFloat = 5
-
-    @State private var isDragging = false
-    @State private var lastHapticIndex: Int = -1
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalContentWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barGap
-            let startX = (geo.size.width - totalContentWidth) / 2
-
-            ZStack(alignment: .leading) {
-                // Static tick marks — all same height, no individual animations
-                HStack(spacing: barGap) {
-                    ForEach(0..<barCount, id: \.self) { index in
-                        let barValue = Double(index) / Double(barCount - 1) * maxDuration
-                        let isPassed = value >= barValue
-
-                        Capsule()
-                            .fill(isPassed ? Color.white.opacity(0.9) : Color.primary.opacity(0.1))
-                            .frame(width: barWidth, height: 28)
-                    }
-                }
-                .position(x: geo.size.width / 2, y: geo.size.height / 2)
-
-                // Thumb — a clean white line with shadow
-                Capsule()
-                    .fill(.white)
-                    .frame(width: 3, height: 44)
-                    .shadow(
-                        color: .black.opacity(isDragging ? 0.35 : 0.2),
-                        radius: isDragging ? 8 : 4,
-                        x: 0,
-                        y: 1
-                    )
-                    .position(
-                        x: startX + thumbOffset(totalWidth: totalContentWidth),
-                        y: geo.size.height / 2
-                    )
-                    .animation(.spring(response: 0.22, dampingFraction: 0.88), value: value)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in
-                        isDragging = true
-                        updateValue(from: gesture, totalWidth: totalContentWidth, startX: startX)
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                        snapIfNeeded()
-                    }
-            )
-        }
-    }
-
-    private func thumbOffset(totalWidth: CGFloat) -> CGFloat {
-        let ratio = value / maxDuration
-        return CGFloat(ratio) * totalWidth + barWidth / 2
-    }
-
-    private func updateValue(from gesture: DragGesture.Value, totalWidth: CGFloat, startX: CGFloat) {
-        let relativeX = gesture.location.x - startX
-        let ratio = max(0, min(1, relativeX / totalWidth))
-        let rawValue = Double(ratio) * maxDuration
-        let snapped = round(rawValue / 5) * 5
-        value = max(0, min(snapped, maxDuration))
-        isIndefinite = value < minDuration
-
-        let bucket = Int(value / 5)
-        if bucket != lastHapticIndex {
-            let style: UIImpactFeedbackGenerator.FeedbackStyle = (bucket == 0) ? .medium : .light
-            UIImpactFeedbackGenerator(style: style).impactOccurred()
-            lastHapticIndex = bucket
-        }
-    }
-
-    private func snapIfNeeded() {
-        if value < minDuration && value > 0 {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                value = 0
-                isIndefinite = true
-            }
-        }
-    }
-}
 
 // MARK: - Operator Row
 
@@ -526,16 +522,27 @@ private struct OperatorRow: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 2)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NoFlashButtonStyle())
     }
 }
 
+
+private struct NoFlashButtonStyle: ButtonStyle {
+    func makeButtonLabel(configuration: Configuration) -> some View {
+        configuration.label
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+    }
+}
 // MARK: - Ticket Reveal Card
 
 /// A premium, Wallet/Flighty-style entrance: the pass scales and fades in
 /// with a soft spring, then a single light sweep glides across it once.
-/// No printer metaphor — just a clean, confident materialisation.
 private struct TicketRevealCard: View {
     let origin: Place
     let destination: Place?
@@ -544,7 +551,7 @@ private struct TicketRevealCard: View {
     let isIndefinite: Bool
 
     @State private var hasAppeared = false
-    @State private var shimmerProgress: CGFloat = -0.5
+
     @State private var hasAnimated = false
 
     private var ticketSeed: String {
@@ -558,7 +565,7 @@ private struct TicketRevealCard: View {
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .shadow(color: .black.opacity(hasAppeared ? 0.18 : 0), radius: 22, x: 0, y: 16)
-            .overlay(shimmerOverlay)
+
             .onAppear {
                 guard !hasAnimated else { return }
                 hasAnimated = true
@@ -566,9 +573,7 @@ private struct TicketRevealCard: View {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                     hasAppeared = true
                 }
-                withAnimation(.easeInOut(duration: 0.85).delay(0.2)) {
-                    shimmerProgress = 1.5
-                }
+
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -576,21 +581,7 @@ private struct TicketRevealCard: View {
             }
     }
 
-    private var shimmerOverlay: some View {
-        GeometryReader { geo in
-            LinearGradient(
-                colors: [.clear, .white.opacity(0.55), .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: geo.size.width * 0.4)
-            .rotationEffect(.degrees(18))
-            .offset(x: shimmerProgress * geo.size.width)
-            .blendMode(.plusLighter)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .allowsHitTesting(false)
-    }
+
 
     private var ticketBody: some View {
         let opColor = company?.backgroundColor ?? .blue
@@ -598,12 +589,9 @@ private struct TicketRevealCard: View {
         return ZStack {
             Color(.tertiarySystemGroupedBackground)
 
-            GuillochePattern()
-                .stroke(Color.primary.opacity(0.04), lineWidth: 0.8)
-                .drawingGroup()
+            
 
             VStack(spacing: 0) {
-                // Header with operator badge
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: "train.side.front.car")
@@ -615,8 +603,8 @@ private struct TicketRevealCard: View {
                     .foregroundStyle(.secondary.opacity(0.7))
 
                     Spacer()
+                  
 
-                    // Operator colour badge only here
                     HStack(spacing: 4) {
                         Image(systemName: "train.fill")
                             .font(.system(size: 10, weight: .bold))
@@ -632,10 +620,9 @@ private struct TicketRevealCard: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
-
-                // Route
+                Spacer()
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack( spacing: 2) {
                         Text(origin.code)
                             .font(.system(size: 28, weight: .black, design: .rounded))
                             .foregroundStyle(.primary)
@@ -650,11 +637,9 @@ private struct TicketRevealCard: View {
                     VStack(spacing: 2) {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.secondary.opacity(0.6))
+                            .foregroundStyle(.primary.opacity(0.6))
 
-                        Capsule()
-                            .fill(Color.primary.opacity(0.12))
-                            .frame(width: 40, height: 4)
+
                     }
 
                     Spacer()
@@ -680,16 +665,8 @@ private struct TicketRevealCard: View {
 
                 Spacer()
 
-                // Perforation line
-                HStack(spacing: 0) {
-                    ForEach(0..<24) { i in
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.12))
-                            .frame(width: i % 2 == 0 ? 4 : 6, height: 1.5)
-                    }
-                }
+              
 
-                // Footer
                 HStack(spacing: 0) {
                     DetailColumn(
                         title: "DATE",
@@ -711,7 +688,7 @@ private struct TicketRevealCard: View {
 
                     VStack(alignment: .trailing, spacing: 4) {
                         BarcodeShape(seed: ticketSeed)
-                            .frame(width: 50, height: 24)
+                            .frame(width: 70, height: 24)
                             .foregroundStyle(.primary.opacity(0.5))
                     }
                     .frame(maxWidth: .infinity)
@@ -790,5 +767,15 @@ private struct DetailColumn: View {
 // MARK: - Preview
 
 #Preview {
-    TicketFlowView(store: .preview)
+    TicketView(store: .preview, isPresented: .constant(true))
+}
+
+#Preview("Ticket step only") {
+    TicketStepView(
+        origin: PlaceNames.byName["Folsense"] ?? Place(name: "Folsense", code: "FOL"),
+        destination: PlaceNames.all.first,
+        company: nil, // or a plain, non-SwiftData mock if RailCompany is a class you can init freely
+        duration: 45,
+        isIndefinite: false
+    )
 }

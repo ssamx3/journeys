@@ -169,21 +169,47 @@ final class JourneyStore {
 extension JourneyStore {
     @MainActor
     static var preview: JourneyStore {
-
         let schema = Schema([
             Journey.self,
             RailCompany.self,
             CommuterPass.self,
             Stamp.self
         ])
-        
+
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(for: schema, configurations: [configuration])
-        
+
         let store = JourneyStore(context: container.mainContext)
 
-       
-        
+        // Seed mock companies so preview flows (operator select, ticket reveal) actually work
+        _ = store.createCompany(
+            name: "Northline Rail",
+            cardText: "NORTHLINE",
+            backgroundColorHex: "007AFF",
+            blockColorHex: "FF2D55",
+            blockShapeRaw: "circle",
+            blockPositionRaw: "bottom",
+            fontColorHex: "FFFFFF"
+        )
+        _ = store.createCompany(
+            name: "Coastal Express",
+            cardText: "COASTAL",
+            backgroundColorHex: "34C759",
+            blockColorHex: "FFCC00",
+            blockShapeRaw: "square",
+            blockPositionRaw: "top",
+            fontColorHex: "FFFFFF"
+        )
+        _ = store.createCompany(
+            name: "Midland Connect",
+            cardText: "MIDLAND",
+            backgroundColorHex: "AF52DE",
+            blockColorHex: "FF9500",
+            blockShapeRaw: "triangle",
+            blockPositionRaw: "trailing",
+            fontColorHex: "FFFFFF"
+        )
+
         return store
     }
 }

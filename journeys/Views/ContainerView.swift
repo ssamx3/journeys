@@ -58,6 +58,12 @@ struct ContainerView: View {
                     
                 
                 }
+
+                if showingTicketFlow {
+                    TicketView(store: store, isPresented: $showingTicketFlow)
+                        .zIndex(2)
+                        .transition(.opacity)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showingStubBook) { StubBookView() }
@@ -65,15 +71,16 @@ struct ContainerView: View {
                 CreatePassView(store: store)
             }
             
-            .sheet(isPresented: $showingTicketFlow) {
-                TicketFlowView(store: store)
-            }
-            
             
             .onChange(of: showingCreatePass) { _, isShowing in
                 if !isShowing {
                     selectedCompany = nil
                     selectedCompanyJourneys = []
+                    refreshData()
+                }
+            }
+            .onChange(of: showingTicketFlow) { _, isShowing in
+                if !isShowing {
                     refreshData()
                 }
             }
@@ -143,16 +150,22 @@ struct ContainerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("currently at")
                         .font(.subheadline)
+                        .fontDesign(.rounded)
                         .foregroundStyle(.secondary)
+                        
                     Text(currentStation)
                         .font(.largeTitle.bold())
+                        .fontDesign(.rounded)
                 }
 
                 Button {
-                    showingTicketFlow = true
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showingTicketFlow = true
+                    }
                 } label: {
                     HStack {
                         Text("Get tickets")
+                            .fontDesign(.rounded)
                         Spacer()
                         Image(systemName: "arrow.right")
                     }
@@ -174,6 +187,7 @@ struct ContainerView: View {
             HStack {
                 Text("passes")
                     .font(.subheadline)
+                    .fontDesign(.rounded)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
@@ -181,6 +195,7 @@ struct ContainerView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.subheadline)
+                        .fontDesign(.rounded)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -233,10 +248,12 @@ struct ContainerView: View {
             HStack {
                 Text("stubs")
                     .font(.subheadline)
+                    .fontDesign(.rounded)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
+                    .fontDesign(.rounded)
                     .foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -245,6 +262,7 @@ struct ContainerView: View {
                     if recentJourneys.isEmpty {
                         Text("No journeys yet")
                             .font(.caption)
+                            .fontDesign(.rounded)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 20)
                     } else {
@@ -298,6 +316,7 @@ struct ContainerView: View {
     private var debugCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("debug")
+                .fontDesign(.rounded)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -306,6 +325,7 @@ struct ContainerView: View {
                     addDummyJourney()
                 } label: {
                     Label("Add Journey", systemImage: "plus.circle")
+                        .fontDesign(.rounded)
                         .font(.caption.weight(.medium))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -319,6 +339,7 @@ struct ContainerView: View {
                 } label: {
                     Label("Remove Last", systemImage: "minus.circle")
                         .font(.caption.weight(.medium))
+                        .fontDesign(.rounded)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.red.opacity(0.15))
@@ -331,6 +352,7 @@ struct ContainerView: View {
                 } label: {
                     Label("Reset All", systemImage: "trash.slash")
                         .font(.caption.weight(.medium))
+                        .fontDesign(.rounded)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.red.opacity(0.25))
@@ -369,6 +391,7 @@ struct ContainerView: View {
                 ForEach(StatsRange.allCases, id: \.self) { range in
                     Text(range.rawValue)
                         .font(.caption2.weight(.semibold))
+                        .fontDesign(.rounded)
                         .foregroundStyle(selection == range ? Color.primary : Color.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -572,6 +595,7 @@ struct CommuterPassCard: View {
                             .foregroundStyle(.white.opacity(0.6))
                         Text("\(streak) day streak")
                             .font(.subheadline.weight(.semibold))
+                            .fontDesign(.rounded)
                             .foregroundStyle(.white)
                     }
                     Spacer()
@@ -593,11 +617,13 @@ struct CommuterPassCard: View {
                                     if stampedDays[index] {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 9, weight: .bold))
+                                            .fontDesign(.rounded)
                                             .foregroundStyle(Color.black)
                                     }
                                 }
                             Text(dayLetters[index])
                                 .font(.caption2.weight(.medium))
+                                .fontDesign(.rounded)
                                 .foregroundStyle(.white.opacity(0.7))
                         }
                     }
@@ -666,6 +692,7 @@ struct PassCard: View {
 
                 Text(cardText)
                     .font(.system(size: 22))
+                    .fontDesign(.rounded)
                     .foregroundStyle(fontColor)
             }
             .padding(12)
@@ -715,19 +742,23 @@ struct Stub: View {
 
                 HStack(spacing: 4) {
                     Text(originCode.uppercased())
+                        .fontDesign(.rounded)
                     Image(systemName: "arrow.right")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(destinationCode.uppercased())
+                        .fontDesign(.rounded)
                 }
                 .font(.system(.subheadline).weight(.bold))
                 .foregroundStyle(.primary)
 
                 Text(subtitle)
+                    .fontDesign(.rounded)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Text(operatorName.uppercased())
+                    .fontDesign(.rounded)
                     .font(.system(.caption2).weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -783,10 +814,12 @@ struct StatTile: View {
             Text(value)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.primary)
+                .fontDesign(.rounded)
                 .monospacedDigit()
                 .contentTransition(.numericText())
 
             Text(label)
+                .fontDesign(.rounded)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
