@@ -143,6 +143,8 @@ struct ContainerView: View {
         let startDate: Date
 
         switch statsRange {
+        case .day:
+            startDate = calendar.date(byAdding: .day, value: -1, to: now) ?? now
         case .week:
             startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
         case .month:
@@ -219,7 +221,7 @@ struct ContainerView: View {
                         .font(.subheadline)
                         .fontDesign(.rounded)
                         .foregroundStyle(.secondary)
-                }
+                }.tint(.secondary)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -412,6 +414,7 @@ struct ContainerView: View {
     }
 
     private enum StatsRange: String, CaseIterable {
+        case day = "24H"
         case week = "7D"
         case month = "30D"
         case year = "365D"

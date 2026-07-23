@@ -259,11 +259,12 @@ private struct NativePickerSheet<Content: View>: View {
 // MARK: - Date range filter
 
 private enum StubDateRange: CaseIterable {
-    case all, week, month, year
+    case all, day, week, month, year
 
     var label: String {
         switch self {
         case .all: return "All time"
+        case .day: return "Past 24 hours"
         case .week: return "Past week"
         case .month: return "Past month"
         case .year: return "Past year"
@@ -274,6 +275,8 @@ private enum StubDateRange: CaseIterable {
         switch self {
         case .all:
             return true
+        case .day:
+            return date >= Calendar.current.date(byAdding: .day, value: -1, to: .now) ?? .distantPast
         case .week:
             return date >= Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
         case .month:
