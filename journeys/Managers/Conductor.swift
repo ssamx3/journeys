@@ -11,15 +11,17 @@ final class Conductor {
     private(set) var isEndless: Bool = false
     private(set) var finishAtNextStop: Bool = false
     private(set) var overdriveStartSeconds: TimeInterval?
-   
+    private(set) var isPaused: Bool = false
 
-    
     private var now: Date = .now
     private var tickTask: Task<Void, Never>?
-    
+    private var pauseStartedAt: Date?
+    private var pausedAccumulated: TimeInterval = 0
+
     var elapsedSeconds: TimeInterval{
         guard let startTime else { return 0 }
-        return now.timeIntervalSince(startTime)}
+        let referenceNow = isPaused ? (pauseStartedAt ?? now) : now
+        return referenceNow.timeIntervalSince(startTime) - pausedAccumulated}
     
     var isOverdriveActive: Bool {
         return finishAtNextStop}
@@ -66,11 +68,31 @@ final class Conductor {
         self.isEndless = endless
         self.startTime = .now
         self.finishAtNextStop = false
+        self.isPaused = false
+        self.pauseStartedAt = nil
+        self.pausedAccumulated = 0
         
         self.now = .now
         
         startTicking()
         
+    }
+    
+    /// Pauses elapsed-time accumulation. Intended for indefinite journeys
+    /// only — the countdown-mode auto-disembark check keeps evaluating
+    /// against wall-clock progress, so pausing there would just delay a
+    /// finish the person already committed to.
+    func pause() {
+        guard startTime != nil, !isPaused else { return }
+        isPaused = true
+        pauseStartedAt = .now
+    }
+    
+    func resume() {
+        guard let pauseStartedAt else { return }
+        pausedAccumulated += Date.now.timeIntervalSince(pauseStartedAt)
+        self.pauseStartedAt = nil
+        isPaused = false
     }
     
     func disembarkAtNextStop() {
@@ -98,6 +120,9 @@ final class Conductor {
         targetDuration = nil
         isEndless = false
         finishAtNextStop = false
+        isPaused = false
+        pauseStartedAt = nil
+        pausedAccumulated = 0
        
         
         return result
@@ -115,6 +140,9 @@ final class Conductor {
             targetDuration = nil
             isEndless = false
             finishAtNextStop = false
+            isPaused = false
+            pauseStartedAt = nil
+            pausedAccumulated = 0
         }
     
     
@@ -124,9 +152,11 @@ final class Conductor {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 self.now = .now
-                if self.shouldAutoDisembark {
-                    disembark()
-                }
+                // Deliberately does NOT call disembark() itself: doing so tore
+                // down journey state before FocusTimerView's own tick loop got
+                // a chance to notice shouldAutoDisembark and react (e.g. move
+                // to the post-journey screen). FocusTimerView is the single
+                // place that decides when a finished journey actually ends.
             }
         }
     }

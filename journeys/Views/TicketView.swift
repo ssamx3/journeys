@@ -10,6 +10,7 @@ import SwiftData
 
 struct TicketView: View {
     let store: JourneyStore
+    let stationStore: CurrentStationStore
     @Binding var isPresented: Bool
 
     @State private var appearPhase: Double = 0
@@ -20,8 +21,9 @@ struct TicketView: View {
     @State private var selectedCompany: RailCompany?
     @State private var destination: Place?
     @State private var estimatedMiles: Double = 0
+    @State private var showingFocusTimer: Bool = false
 
-    private let origin = PlaceNames.byName["Folsense"] ?? Place(name: "Folsense", code: "FOL")
+    private var origin: Place { stationStore.currentPlace }
     private let minDuration: Double = 15
     private let maxDuration: Double = 180
 
@@ -33,14 +35,15 @@ struct TicketView: View {
 
     var body: some View {
         ZStack {
+            // MARK: Layer 0 — Background
             Color(.systemGroupedBackground)
                 .ignoresSafeArea()
                 .opacity(appearPhase)
+                .zIndex(0)
 
+            // MARK: Layer 1 — Main Ticket Flow Content
             VStack(spacing: 0) {
                 topBar
-
-                
 
                 ZStack {
                     switch step {
@@ -82,11 +85,41 @@ struct TicketView: View {
                     advance()
                 }
                 .opacity(appearPhase)
-                
+            }
+            .zIndex(1)
+            .opacity(showingFocusTimer ? 0 : appearPhase)
+            .allowsHitTesting(!showingFocusTimer)
+            .animation(.easeOut(duration: 0.2), value: showingFocusTimer)
+
+            // MARK: Layer 2 — Focus Timer Overlay
+            if showingFocusTimer, let company = selectedCompany {
+                FocusTimerView(
+                    store: store,
+                    stationStore: stationStore,
+                    company: company,
+                    origin: origin,
+                    destination: isIndefinite ? nil : destination,
+                    duration: isIndefinite ? nil : duration,
+                    isIndefinite: isIndefinite,
+                    isPresented: $showingFocusTimer
+                )
+                .transition(.opacity)
+                .zIndex(2)
             }
         }
         .onChange(of: duration) { _, newValue in
             updateJourneyEstimate(duration: newValue)
+        }
+        .onChange(of: showingFocusTimer) { _, isShowing in
+            if !isShowing {
+                isPresented = false
+                step = .duration
+                duration = 15
+                isIndefinite = false
+                selectedCompany = nil
+                destination = nil
+                estimatedMiles = 0
+            }
         }
         .onAppear {
             updateJourneyEstimate(duration: duration)
@@ -143,9 +176,6 @@ struct TicketView: View {
         )
     }
 
-    // MARK: - Copy
-
-
     private var actionTitle: String {
         switch step {
         case .duration: return "Next"
@@ -168,8 +198,11 @@ struct TicketView: View {
                 step = .ticket
             }
         case .ticket:
+            guard selectedCompany != nil else { return }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            closeView()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingFocusTimer = true
+            }
         }
     }
 
@@ -190,11 +223,13 @@ struct TicketView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             isPresented = false
-            // Reset for next time this is opened fresh.
             step = .duration
             duration = 15
             isIndefinite = false
             selectedCompany = nil
+            destination = nil
+            estimatedMiles = 0
+            showingFocusTimer = false
         }
     }
 
@@ -228,10 +263,8 @@ struct TicketView: View {
 
 // MARK: - Shared Flow Chrome
 
-/// Progress dots + a short status line.
 private struct FlowStepHeader: View {
     let current: Int
-
     private let totalSteps = 3
 
     var body: some View {
@@ -244,12 +277,9 @@ private struct FlowStepHeader: View {
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: current)
-            
-            
         }
     }
 }
-
 
 private struct FlowActionBar: View {
     let title: String
@@ -284,7 +314,7 @@ private struct FlowActionBar: View {
     }
 }
 
-// MARK: - Step 1: Duration Selection (Polished)
+// MARK: - Step 1: Duration Selection
 
 private struct DurationStepView: View {
     let origin: Place
@@ -300,9 +330,7 @@ private struct DurationStepView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // Main focus: duration in minutes
             VStack(spacing: 4) {
-                
                 Text("How long is your journey?")
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -334,7 +362,6 @@ private struct DurationStepView: View {
                     }
                 }
 
-                // Route info below, smaller and secondary
                 HStack(spacing: 8) {
                     Text(origin.code)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -362,7 +389,6 @@ private struct DurationStepView: View {
 
             Spacer(minLength: 0)
 
-            // Native slider at bottom
             VStack(spacing: 12) {
                 Slider(
                     value: $duration,
@@ -370,8 +396,6 @@ private struct DurationStepView: View {
                 )
                 .tint(isIndefinite ? Color.secondary.opacity(0.4) : Color.secondary.opacity(1))
                 .frame(height: 32)
-
-
                 .padding(.horizontal, 4)
             }
             .padding(.horizontal, 20)
@@ -389,6 +413,7 @@ private struct DurationStepView: View {
         }
     }
 }
+
 // MARK: - Step 2: Operator Selection
 
 private struct OperatorStepView: View {
@@ -462,9 +487,6 @@ private struct TicketStepView: View {
     }
 }
 
-// MARK: - Tactile Scrubber Slider
-
-
 // MARK: - Operator Row
 
 private struct OperatorRow: View {
@@ -475,11 +497,9 @@ private struct OperatorRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                PassCard(
-                    title: company.name,
+                // FIX: Use a smaller PassCard preview with scaled font
+                PassCardPreview(
                     cardText: company.cardText,
-                    subtitle: company.level.rawValue.capitalized,
-                    iconName: "train.fill",
                     backgroundColor: company.backgroundColor,
                     blockColor: company.blockColor,
                     blockShape: company.blockShape,
@@ -528,6 +548,71 @@ private struct OperatorRow: View {
     }
 }
 
+// MARK: - Pass Card Preview (for Operator Row)
+
+/// A compact version of PassCard used in the operator selection list.
+/// Scales the font proportionally to fit the smaller frame.
+private struct PassCardPreview: View {
+    let cardText: String
+    let backgroundColor: Color
+    let blockColor: Color
+    let blockShape: CardBlockShape
+    let blockPosition: CardBlockPosition
+    let fontColor: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let size = max(w, h)
+            // Scale font based on card size (80x52 vs 150x110)
+            let fontSize = min(w * 0.18, h * 0.28)
+
+            ZStack(alignment: .topLeading) {
+                backgroundColor
+
+                Group {
+                    switch blockShape {
+                    case .circle:
+                        Circle().fill(blockColor)
+                    case .square:
+                        Rectangle().fill(blockColor)
+                    }
+                }
+                .frame(width: size, height: size)
+                .position(previewBlockCoordinates(for: blockPosition, width: w, height: h))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top) {
+                        Spacer()
+                        Image(systemName: "wave.3.forward")
+                            .font(.system(size: max(8, fontSize * 0.5), weight: .bold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    Spacer()
+
+                    Text(cardText)
+                        .font(.system(size: fontSize, design: .rounded))
+                        .foregroundStyle(fontColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                }
+                .padding(8)
+            }
+        }
+    }
+
+    private func previewBlockCoordinates(for position: CardBlockPosition, width: CGFloat, height: CGFloat) -> CGPoint {
+        switch position {
+        case .top: return CGPoint(x: width / 2, y: 0)
+        case .bottom: return CGPoint(x: width / 2, y: height)
+        case .left: return CGPoint(x: 0, y: height / 2)
+        case .right: return CGPoint(x: width, y: height / 2)
+        }
+    }
+}
 
 private struct NoFlashButtonStyle: ButtonStyle {
     func makeButtonLabel(configuration: Configuration) -> some View {
@@ -539,10 +624,9 @@ private struct NoFlashButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
     }
 }
+
 // MARK: - Ticket Reveal Card
 
-/// A premium, Wallet/Flighty-style entrance: the pass scales and fades in
-/// with a soft spring, then a single light sweep glides across it once.
 private struct TicketRevealCard: View {
     let origin: Place
     let destination: Place?
@@ -551,7 +635,6 @@ private struct TicketRevealCard: View {
     let isIndefinite: Bool
 
     @State private var hasAppeared = false
-
     @State private var hasAnimated = false
 
     private var ticketSeed: String {
@@ -565,7 +648,6 @@ private struct TicketRevealCard: View {
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .shadow(color: .black.opacity(hasAppeared ? 0.18 : 0), radius: 22, x: 0, y: 16)
-
             .onAppear {
                 guard !hasAnimated else { return }
                 hasAnimated = true
@@ -574,22 +656,17 @@ private struct TicketRevealCard: View {
                     hasAppeared = true
                 }
 
-
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
             }
     }
 
-
-
     private var ticketBody: some View {
         let opColor = company?.backgroundColor ?? .blue
 
         return ZStack {
             Color(.tertiarySystemGroupedBackground)
-
-            
 
             VStack(spacing: 0) {
                 HStack {
@@ -603,7 +680,6 @@ private struct TicketRevealCard: View {
                     .foregroundStyle(.secondary.opacity(0.7))
 
                     Spacer()
-                  
 
                     HStack(spacing: 4) {
                         Image(systemName: "train.fill")
@@ -620,9 +696,11 @@ private struct TicketRevealCard: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
+
                 Spacer()
+
                 HStack(spacing: 12) {
-                    VStack( spacing: 2) {
+                    VStack(spacing: 2) {
                         Text(origin.code)
                             .font(.system(size: 28, weight: .black, design: .rounded))
                             .foregroundStyle(.primary)
@@ -638,8 +716,6 @@ private struct TicketRevealCard: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.primary.opacity(0.6))
-
-
                     }
 
                     Spacer()
@@ -664,8 +740,6 @@ private struct TicketRevealCard: View {
                 .padding(.top, 12)
 
                 Spacer()
-
-              
 
                 HStack(spacing: 0) {
                     DetailColumn(
@@ -767,14 +841,14 @@ private struct DetailColumn: View {
 // MARK: - Preview
 
 #Preview {
-    TicketView(store: .preview, isPresented: .constant(true))
+    TicketView(store: .preview, stationStore: CurrentStationStore(), isPresented: .constant(true))
 }
 
 #Preview("Ticket step only") {
     TicketStepView(
         origin: PlaceNames.byName["Folsense"] ?? Place(name: "Folsense", code: "FOL"),
         destination: PlaceNames.all.first,
-        company: nil, // or a plain, non-SwiftData mock if RailCompany is a class you can init freely
+        company: nil,
         duration: 45,
         isIndefinite: false
     )

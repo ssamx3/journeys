@@ -18,8 +18,8 @@ final class Stamp {
 
 @Model
 final class CommuterPass {
-    @Relationship(deleteRule: .cascade, inverse: \Stamp.pass)
     var streakWeeks: Int = 0
+    @Relationship(deleteRule: .cascade, inverse: \Stamp.pass)
     var stamps: [Stamp] = []
     var stampsEver: Int { stamps.count }
     var stampsLast7Days: Int {

@@ -9,6 +9,15 @@ import Observation
 import SwiftData
 import Foundation
 
+
+struct JourneyCompletionOutcome {
+    let stampAwarded: Bool
+    let isFirstStampToday: Bool
+    let streakWeeks: Int
+    let dayStreak: Int
+    let milestone: CommuterPassMilestone
+}
+
 @Observable
 final class JourneyStore {
     private let context: ModelContext
@@ -18,17 +27,45 @@ final class JourneyStore {
     }
 
     // MARK: Journeys
-    func completeJourney(_ result: JourneyResult) {
+
+
+    @discardableResult
+    func completeJourney(_ result: JourneyResult) -> JourneyCompletionOutcome {
         let journey = Journey(company: result.company, miles: result.miles, startTime: result.startTime, endTime: result.endTime, startPlace: result.startPlace, endPlace: result.endPlace)
         context.insert(journey)
         result.company.totalMiles += result.miles
         result.company.totalTimeTravelled += result.endTime.timeIntervalSince(result.startTime)
 
-
         let duration = result.endTime.timeIntervalSince(result.startTime)
-        if duration >= 20 * 60 {
-            awardStamp()
+        guard duration >= 15 * 60 else {
+            let status = currentStreakStatus()
+            return JourneyCompletionOutcome(
+                stampAwarded: false,
+                isFirstStampToday: false,
+                streakWeeks: status.streakWeeks,
+                dayStreak: status.dayStreak,
+                milestone: status.milestone
+            )
         }
+
+        let pass = fetchOrCreateCommuterPass()
+        let wasFirstToday = !hasStampToday(pass)
+
+        awardStamp()
+
+        let status = currentStreakStatus()
+        return JourneyCompletionOutcome(
+            stampAwarded: true,
+            isFirstStampToday: wasFirstToday,
+            streakWeeks: status.streakWeeks,
+            dayStreak: status.dayStreak,
+            milestone: status.milestone
+        )
+    }
+
+    private func hasStampToday(_ pass: CommuterPass) -> Bool {
+        let calendar = Calendar.current
+        return pass.stamps.contains { calendar.isDateInToday($0.date) }
     }
 
     func deleteJourney(_ journey: Journey) {
@@ -45,7 +82,7 @@ final class JourneyStore {
         descriptor.fetchLimit = limit
         return (try? context.fetch(descriptor)) ?? []
     }
-    
+
     func fetchJourneys(from startDate: Date) -> [Journey] {
         let descriptor = FetchDescriptor<Journey>(
             predicate: #Predicate { $0.startTime >= startDate },
@@ -147,12 +184,37 @@ final class JourneyStore {
         pass.lastEvaluatedWeekEnd = windowEnd
     }
 
-    func currentStreakStatus() -> (stampsThisWeek: Int, streakWeeks: Int, milestone: CommuterPassMilestone) {
+    func currentStreakStatus() -> (stampsThisWeek: Int, streakWeeks: Int, dayStreak: Int, milestone: CommuterPassMilestone) {
         let pass = fetchOrCreateCommuterPass()
         evaluateStreak(for: pass)
-        return (pass.stampsLast7Days, pass.streakWeeks, pass.milestone)
+        let dayStreak = computeDayStreak(for: pass)
+        return (pass.stampsLast7Days, pass.streakWeeks, dayStreak, pass.milestone)
     }
 
+
+    private func computeDayStreak(for pass: CommuterPass) -> Int {
+        let calendar = Calendar.current
+        let stamps = pass.stamps
+        guard !stamps.isEmpty else { return 0 }
+
+        var stampDates = Set<Date>()
+        for stamp in stamps {
+            let startOfDay = calendar.startOfDay(for: stamp.date)
+            stampDates.insert(startOfDay)
+        }
+
+        let today = calendar.startOfDay(for: Date())
+        var streak = 0
+        var currentDate = today
+
+        while stampDates.contains(currentDate) {
+            streak += 1
+            guard let previousDate = calendar.date(byAdding: .day, value: -1, to: currentDate) else { break }
+            currentDate = previousDate
+        }
+
+        return streak
+    }
 
     func deleteAllJourneys() {
         let allJourneys = (try? context.fetch(FetchDescriptor<Journey>())) ?? []
@@ -181,7 +243,7 @@ extension JourneyStore {
 
         let store = JourneyStore(context: container.mainContext)
 
-        // Seed mock companies so preview flows (operator select, ticket reveal) actually work
+
         _ = store.createCompany(
             name: "Northline Rail",
             cardText: "NORTHLINE",

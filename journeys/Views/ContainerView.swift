@@ -11,6 +11,8 @@ import SwiftData
 struct ContainerView: View {
     let store: JourneyStore
 
+    @State private var stationStore = CurrentStationStore()
+
     @State private var showingStubBook = false
     @State private var showingCreatePass = false
     @State private var statsRange: StatsRange = .week
@@ -20,48 +22,54 @@ struct ContainerView: View {
     @State private var recentJourneys: [Journey] = []
     @State private var commuterPass: CommuterPass?
 
-
     @State private var statsSnapshot = StatsSnapshot(miles: 0, timeLabel: "0m", topOperator: "-", personalBestMiles: 0)
 
     @Namespace private var heroNamespace
     @State private var selectedCompany: RailCompany?
     @State private var selectedCompanyJourneys: [Journey] = []
 
-    private let currentStation = "Folsense Station"
+    private var currentStation: String { "\(stationStore.currentPlace.name) Station" }
 
     var body: some View {
         NavigationStack {
             ZStack {
+                // MARK: Layer 0 — Background
                 Color(.systemGroupedBackground)
                     .ignoresSafeArea()
+                    .zIndex(0)
 
+                // MARK: Layer 1 — Main Content
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         heroCard
                         passesCard
-                        
+
                         stubsCard
                             .contentShape(RoundedRectangle(cornerRadius: 16))
                             .onTapGesture { showingStubBook = true }
 
                         statsCard
-                        debugCard
+                        
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                
+                .zIndex(1)
+                .opacity(selectedCompany != nil || showingTicketFlow ? 0 : 1)
+                .animation(.easeOut(duration: 0.2), value: selectedCompany != nil || showingTicketFlow)
+
+                // MARK: Layer 2 — RailCompany Detail Overlay
                 if let company = selectedCompany {
                     RailCompanyView(store: store, company: company, selectedCompany: $selectedCompany, journeys: selectedCompanyJourneys)
                         .zIndex(2)
-                    
-                
+                        .transition(.opacity)
                 }
 
+                // MARK: Layer 3 — Ticket Flow Overlay
                 if showingTicketFlow {
-                    TicketView(store: store, isPresented: $showingTicketFlow)
-                        .zIndex(2)
+                    TicketView(store: store, stationStore: stationStore, isPresented: $showingTicketFlow)
+                        .zIndex(3)
                         .transition(.opacity)
                 }
             }
@@ -70,8 +78,8 @@ struct ContainerView: View {
             .sheet(isPresented: $showingCreatePass) {
                 CreatePassView(store: store)
             }
-            
-            
+
+
             .onChange(of: showingCreatePass) { _, isShowing in
                 if !isShowing {
                     selectedCompany = nil
@@ -90,7 +98,6 @@ struct ContainerView: View {
                 updateStats()
             }
             .onChange(of: selectedCompany) { _, newValue in
-
                 if newValue == nil {
                     refreshData()
                 }
@@ -152,7 +159,7 @@ struct ContainerView: View {
                         .font(.subheadline)
                         .fontDesign(.rounded)
                         .foregroundStyle(.secondary)
-                        
+
                     Text(currentStation)
                         .font(.largeTitle.bold())
                         .fontDesign(.rounded)
@@ -201,15 +208,14 @@ struct ContainerView: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                // Swapped HStack for LazyHStack
                 HStack(spacing: 12) {
                     if let pass = commuterPass {
                         CommuterPassCard(
-                            streak: pass.streakWeeks,
+                            dayStreak: computeDayStreak(for: pass),
                             stampedDays: stampedDays(for: pass)
                         )
                     }
-                    
+
                     ForEach(companies) { company in
                         PassCard(
                             title: company.name,
@@ -234,13 +240,13 @@ struct ContainerView: View {
                 }
                 .padding(.vertical, 4)
             }
-            
+
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground)))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.secondarySystemGroupedBackground)))
     }
 
     private var stubsCard: some View {
@@ -257,7 +263,6 @@ struct ContainerView: View {
                     .foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                // Swapped HStack for LazyHStack to prevent mass main-thread relationship faults
                 LazyHStack(spacing: 16) {
                     if recentJourneys.isEmpty {
                         Text("No journeys yet")
@@ -367,6 +372,36 @@ struct ContainerView: View {
         .cornerRadius(14)
     }
 
+    // MARK: - Streak Helpers
+
+    /// Computes the current consecutive day streak — how many days in a row
+    /// (going backward from today) have at least one stamp.
+    private func computeDayStreak(for pass: CommuterPass) -> Int {
+        let calendar = Calendar.current
+        let stamps = pass.stamps
+        guard !stamps.isEmpty else { return 0 }
+
+        // Build a set of dates that have stamps (normalized to start of day)
+        var stampDates = Set<Date>()
+        for stamp in stamps {
+            let startOfDay = calendar.startOfDay(for: stamp.date)
+            stampDates.insert(startOfDay)
+        }
+
+        // Count consecutive days backward from today
+        let today = calendar.startOfDay(for: Date())
+        var streak = 0
+        var currentDate = today
+
+        while stampDates.contains(currentDate) {
+            streak += 1
+            guard let previousDate = calendar.date(byAdding: .day, value: -1, to: currentDate) else { break }
+            currentDate = previousDate
+        }
+
+        return streak
+    }
+
     // MARK: - Stats
 
     private struct StatsSnapshot {
@@ -463,7 +498,7 @@ struct ContainerView: View {
         if let existing = allCompanies.randomElement() {
             company = existing
         } else {
-            company = store.createCompany(name: "Debug Rail", cardText: "._.")
+            company = store.createCompany(name: "Debug Rail", cardText: "._.)")
         }
 
         let startPlace = PlaceNames.randomPlace()
@@ -496,8 +531,6 @@ struct ContainerView: View {
         store.deleteAllJourneys()
         refreshData()
     }
-    
-   
 }
 
 // MARK: - Passes UI
@@ -543,12 +576,9 @@ struct HolographicPassBackground: View {
                 endPoint: .bottom
             )
         }
-
-                .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animateGradient)
-                .onAppear {
-
-                    animateGradient = true
-
+        .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animateGradient)
+        .onAppear {
+            animateGradient = true
         }
     }
 }
@@ -577,7 +607,7 @@ struct GuillochePattern: Shape {
 }
 
 struct CommuterPassCard: View {
-    let streak: Int
+    let dayStreak: Int
     let stampedDays: [Bool]
 
     private let dayLetters = ["M", "T", "W", "T", "F", "S", "S"]
@@ -589,11 +619,13 @@ struct CommuterPassCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("COMMUTER PASS ")
+                        Text("COMMUTER PASS")
                             .font(.system(.caption2).weight(.bold))
                             .tracking(1.4)
                             .foregroundStyle(.white.opacity(0.6))
-                        Text("\(streak) day streak")
+
+                        // Show day streak, not week streak
+                        Text(streakLabel)
                             .font(.subheadline.weight(.semibold))
                             .fontDesign(.rounded)
                             .foregroundStyle(.white)
@@ -644,6 +676,16 @@ struct CommuterPassCard: View {
                     lineWidth: 1
                 )
         )
+    }
+
+    private var streakLabel: String {
+        if dayStreak == 0 {
+            return "Start your streak"
+        } else if dayStreak == 1 {
+            return "1 day streak"
+        } else {
+            return "\(dayStreak) day streak"
+        }
     }
 }
 
@@ -703,8 +745,6 @@ struct PassCard: View {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
-      //  .compositingGroup()
-        //   .drawingGroup()
     }
 
     private func blockCoordinates(for position: CardBlockPosition) -> CGPoint {

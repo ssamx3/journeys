@@ -15,14 +15,14 @@ struct RailCompanyView: View {
 
     var body: some View {
         ZStack {
-            // Background materializes
+
             Color(.systemGroupedBackground)
                 .ignoresSafeArea()
                 .opacity(appearPhase)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Close button
+
                     HStack {
                         Spacer()
                         Button { closeView() } label: {
