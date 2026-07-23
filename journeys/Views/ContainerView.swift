@@ -27,6 +27,7 @@ struct ContainerView: View {
     @Namespace private var heroNamespace
     @State private var selectedCompany: RailCompany?
     @State private var selectedCompanyJourneys: [Journey] = []
+    @State private var selectedJourney: Journey?
 
     private var currentStation: String { "\(stationStore.currentPlace.name) Station" }
 
@@ -45,8 +46,6 @@ struct ContainerView: View {
                         passesCard
 
                         stubsCard
-                            .contentShape(RoundedRectangle(cornerRadius: 16))
-                            .onTapGesture { showingStubBook = true }
 
                         statsCard
                         
@@ -56,12 +55,19 @@ struct ContainerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .zIndex(1)
-                .opacity(selectedCompany != nil || showingTicketFlow ? 0 : 1)
-                .animation(.easeOut(duration: 0.2), value: selectedCompany != nil || showingTicketFlow)
+                .opacity(selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook ? 0 : 1)
+                .animation(.easeOut(duration: 0.2), value: selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook)
 
                 // MARK: Layer 2 — RailCompany Detail Overlay
                 if let company = selectedCompany {
                     RailCompanyView(store: store, company: company, selectedCompany: $selectedCompany, journeys: selectedCompanyJourneys)
+                        .zIndex(2)
+                        .transition(.opacity)
+                }
+
+                // MARK: Layer 2b — Stub Detail Overlay
+                if let journey = selectedJourney {
+                    StubDetailView(journey: journey, selectedJourney: $selectedJourney)
                         .zIndex(2)
                         .transition(.opacity)
                 }
@@ -72,9 +78,15 @@ struct ContainerView: View {
                         .zIndex(3)
                         .transition(.opacity)
                 }
+
+                // MARK: Layer 4 — Stub Book Overlay
+                if showingStubBook {
+                    StubBookView(store: store, isPresented: $showingStubBook)
+                        .zIndex(4)
+                        .transition(.opacity)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $showingStubBook) { StubBookView() }
             .sheet(isPresented: $showingCreatePass) {
                 CreatePassView(store: store)
             }
@@ -92,6 +104,11 @@ struct ContainerView: View {
                     refreshData()
                 }
             }
+            .onChange(of: showingStubBook) { _, isShowing in
+                if !isShowing {
+                    refreshData()
+                }
+            }
 
             .onAppear(perform: refreshData)
             .onChange(of: statsRange) { _, _ in
@@ -102,6 +119,12 @@ struct ContainerView: View {
                     refreshData()
                 }
             }
+            .onChange(of: selectedJourney) { _, newValue in
+                if newValue == nil {
+                    refreshData()
+                }
+            }
+            
         }
     }
 
@@ -172,16 +195,11 @@ struct ContainerView: View {
                 } label: {
                     HStack {
                         Text("Get tickets")
-                            .fontDesign(.rounded)
                         Spacer()
                         Image(systemName: "arrow.right")
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(.white)
-                    .background(Color(.blue).opacity(0.9))
-                    .cornerRadius(10)
                 }
+                .buttonStyle(.appPrimary)
             }
             .padding()
             .background(Color(.secondarySystemGroupedBackground))
@@ -192,10 +210,7 @@ struct ContainerView: View {
     private var passesCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("passes")
-                    .font(.subheadline)
-                    .fontDesign(.rounded)
-                    .foregroundStyle(.secondary)
+                SectionLabel("passes")
                 Spacer()
                 Button {
                     showingCreatePass = true
@@ -240,6 +255,7 @@ struct ContainerView: View {
                 }
                 .padding(.vertical, 4)
             }
+            
 
         }
         .padding()
@@ -252,16 +268,16 @@ struct ContainerView: View {
     private var stubsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("stubs")
-                    .font(.subheadline)
-                    .fontDesign(.rounded)
-                    .foregroundStyle(.secondary)
+                SectionLabel("stubs")
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
                     .fontDesign(.rounded)
                     .foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { showingStubBook = true }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     if recentJourneys.isEmpty {
@@ -271,13 +287,20 @@ struct ContainerView: View {
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 20)
                     } else {
-                        ForEach(recentJourneys.prefix(5)) { journey in
+                        ForEach(recentJourneys.sorted(by: { $0.startTime > $1.startTime }).prefix(5)) { journey in
                             Stub(
                                 originCode: PlaceNames.byName[journey.startPlace]?.code ?? "UNK",
                                 destinationCode: PlaceNames.byName[journey.endPlace]?.code ?? "UNK",
                                 subtitle: formatDuration(journey.endTime.timeIntervalSince(journey.startTime)),
                                 operatorName: journey.company.name
                             )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    selectedJourney = journey
+                                }
+                            }
                         }
                     }
                 }
@@ -294,9 +317,7 @@ struct ContainerView: View {
     private var statsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("stats")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                SectionLabel("stats")
                 Spacer()
                 StatsRangeSwitch(selection: $statsRange)
             }
@@ -320,50 +341,29 @@ struct ContainerView: View {
 
     private var debugCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("debug")
-                .fontDesign(.rounded)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            SectionLabel("debug")
 
             HStack(spacing: 10) {
                 Button {
                     addDummyJourney()
                 } label: {
                     Label("Add Journey", systemImage: "plus.circle")
-                        .fontDesign(.rounded)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.green.opacity(0.15))
-                        .foregroundStyle(.green)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(.appChip(selected: false))
 
                 Button {
                     removeLastJourney()
                 } label: {
                     Label("Remove Last", systemImage: "minus.circle")
-                        .font(.caption.weight(.medium))
-                        .fontDesign(.rounded)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.red.opacity(0.15))
-                        .foregroundStyle(.red)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(.appChip(selected: false))
 
                 Button {
                     resetAllJourneys()
                 } label: {
                     Label("Reset All", systemImage: "trash.slash")
-                        .font(.caption.weight(.medium))
-                        .fontDesign(.rounded)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.red.opacity(0.25))
-                        .foregroundStyle(.red)
-                        .clipShape(Capsule())
                 }
+                .buttonStyle(.appChip(selected: false))
             }
         }
         .padding()

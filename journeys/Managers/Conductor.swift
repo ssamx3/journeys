@@ -152,11 +152,7 @@ final class Conductor {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 self.now = .now
-                // Deliberately does NOT call disembark() itself: doing so tore
-                // down journey state before FocusTimerView's own tick loop got
-                // a chance to notice shouldAutoDisembark and react (e.g. move
-                // to the post-journey screen). FocusTimerView is the single
-                // place that decides when a finished journey actually ends.
+
             }
         }
     }

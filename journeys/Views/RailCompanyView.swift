@@ -57,14 +57,19 @@ struct RailCompanyView: View {
             CreatePassView(store: store, company: company)
         }
         .alert("Delete \(company.name)?", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                store.deleteCompany(company)
-                closeView()
-            }
-        } message: {
-            Text("This will permanently delete this RailPass and all associated journeys.")
-        }
+                    Button("Cancel", role: .cancel) { }
+                    Button("Delete", role: .destructive) {
+                        // 1. Trigger the view to close immediately
+                        closeView()
+                        
+                        // 2. Wait for the 0.25s animation to finish before destroying the data
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            store.deleteCompany(company)
+                        }
+                    }
+                } message: {
+                    Text("This will permanently delete this RailPass and all associated journeys.")
+                }
         .onAppear {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
                 appearPhase = 1

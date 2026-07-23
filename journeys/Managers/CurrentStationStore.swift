@@ -6,9 +6,6 @@
 import Observation
 import Foundation
 
-/// Tracks where the user currently "is". Starts at Folsense, and is updated
-/// to the arrival station whenever a journey is completed (via FocusTimerView).
-/// Persisted so it survives app relaunches.
 @Observable
 final class CurrentStationStore {
     private let defaultsKey = "currentStationName"

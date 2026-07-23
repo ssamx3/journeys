@@ -497,7 +497,7 @@ private struct OperatorRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                // FIX: Use a smaller PassCard preview with scaled font
+
                 PassCardPreview(
                     cardText: company.cardText,
                     backgroundColor: company.backgroundColor,
@@ -550,8 +550,6 @@ private struct OperatorRow: View {
 
 // MARK: - Pass Card Preview (for Operator Row)
 
-/// A compact version of PassCard used in the operator selection list.
-/// Scales the font proportionally to fit the smaller frame.
 private struct PassCardPreview: View {
     let cardText: String
     let backgroundColor: Color
@@ -565,7 +563,7 @@ private struct PassCardPreview: View {
             let w = geo.size.width
             let h = geo.size.height
             let size = max(w, h)
-            // Scale font based on card size (80x52 vs 150x110)
+
             let fontSize = min(w * 0.18, h * 0.28)
 
             ZStack(alignment: .topLeading) {

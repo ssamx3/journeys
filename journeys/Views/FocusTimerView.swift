@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import UIKit
+import ActivityKit
 
 // MARK: - Focus Timer View
 
@@ -31,6 +33,8 @@ struct FocusTimerView: View {
     @State private var postJourneyResult: JourneyResult?
     @State private var postJourneyOutcome: JourneyCompletionOutcome?
 
+    @State private var liveActivity: Activity<JourneyActivityAttributes>?
+
     private let indefiniteVoidThreshold: TimeInterval = 15 * 60
 
     var body: some View {
@@ -54,8 +58,9 @@ struct FocusTimerView: View {
                 Spacer(minLength: 0)
 
                 controls
-
                 debugFooter
+
+                
             }
             .opacity(showingPostJourney ? 0 : appearPhase)
             .offset(y: 12 * (1 - appearPhase))
@@ -72,9 +77,14 @@ struct FocusTimerView: View {
                 .zIndex(1)
             }
         }
-        .onAppear(perform: start)
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            start()
+        }
         .onDisappear {
             timerTask?.cancel()
+            UIApplication.shared.isIdleTimerDisabled = false
+            endLiveActivity()
         }
     }
 
@@ -266,6 +276,7 @@ struct FocusTimerView: View {
 
     private var debugFooter: some View {
         Group {
+            
 #if DEBUG
             Button {
                 quickFinish()
@@ -276,6 +287,7 @@ struct FocusTimerView: View {
             }
             .padding(.bottom, 10)
 #endif
+             
         }
     }
 
@@ -302,22 +314,27 @@ struct FocusTimerView: View {
             appearPhase = 1
         }
 
+        startLiveActivity()
 
+        var lastActivityUpdate: Date = .now
         timerTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 displayTick = .now
                 checkAutoDisembark()
+
+
+                if !didFinish, displayTick.timeIntervalSince(lastActivityUpdate) >= 5 {
+                    lastActivityUpdate = displayTick
+                    updateLiveActivity()
+                }
             }
         }
     }
 
     private func checkAutoDisembark() {
         guard !didFinish, !conductor.isPaused else { return }
-        // Covers both modes: countdown journeys hit their target duration,
-        // and indefinite journeys in overdrive hit their next 10-minute stop.
-        // Conductor no longer disembarks itself (see Conductor.startTicking),
-        // so this is the only place a finished journey actually gets closed out.
+
         if conductor.shouldAutoDisembark {
             finishSuccessfully()
         }
@@ -330,6 +347,7 @@ struct FocusTimerView: View {
         } else {
             conductor.pause()
         }
+        updateLiveActivity()
     }
 
     // MARK: - Finishing
@@ -364,6 +382,7 @@ struct FocusTimerView: View {
         let outcome = store.completeJourney(result)
         stationStore.arrive(at: result.endPlace)
 
+        endLiveActivity()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         showPostJourney(result: result, outcome: outcome)
     }
@@ -380,6 +399,7 @@ struct FocusTimerView: View {
         timerTask?.cancel()
         conductor.cancel()
 
+        endLiveActivity()
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         close()
     }
@@ -394,8 +414,8 @@ struct FocusTimerView: View {
             ? max(indefiniteVoidThreshold, conductor.elapsedSeconds)
             : (duration ?? 15) * 60
 
-        let end = Date.now
-        let start = end.addingTimeInterval(-simulatedDuration)
+        let start = conductor.startTime ?? Date.now
+        let end = start.addingTimeInterval(simulatedDuration)
         let simulatedMiles = simulatedDuration * company.level.pace
         let endPlaceName = (destination ?? resolvedIndefiniteDestination()).name
 
@@ -412,6 +432,7 @@ struct FocusTimerView: View {
         let outcome = store.completeJourney(result)
         stationStore.arrive(at: result.endPlace)
 
+        endLiveActivity()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         showPostJourney(result: result, outcome: outcome)
     }
@@ -435,6 +456,74 @@ struct FocusTimerView: View {
             isPresented = false
         }
     }
+
+    // MARK: - Live Activity
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+
+            print("[LiveActivity] Not requesting activity — areActivitiesEnabled is false. Check that NSSupportsLiveActivities is set to YES in the app target's Info.plist, and that the user hasn't disabled Live Activities for this app in Settings.")
+            return
+        }
+
+        let attributes = JourneyActivityAttributes(
+            companyName: company.name,
+            originCode: origin.code,
+            destinationCode: destination?.code ?? "???",
+            isIndefinite: isIndefinite,
+            startDate: conductor.elapsedSeconds > 0 ? Date.now.addingTimeInterval(-conductor.elapsedSeconds) : .now
+        )
+
+        let state = currentActivityState()
+
+        do {
+            liveActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: state, staleDate: nil),
+                pushType: nil
+            )
+        } catch {
+
+            print("[LiveActivity] Activity.request failed: \(error)")
+            liveActivity = nil
+        }
+    }
+
+
+    private func updateLiveActivity() {
+        guard let liveActivity else { return }
+        let state = currentActivityState()
+        Task {
+            await liveActivity.update(.init(state: state, staleDate: nil))
+        }
+    }
+
+    private func endLiveActivity() {
+        guard let liveActivity else { return }
+        let state = currentActivityState()
+        Task {
+            await liveActivity.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate)
+        }
+        self.liveActivity = nil
+    }
+
+    private func currentActivityState() -> JourneyActivityAttributes.ContentState {
+        let targetDate: Date?
+        if isIndefinite {
+            targetDate = nil
+        } else {
+            let remaining = max(0, (duration ?? 0) * 60 - conductor.elapsedSeconds)
+            targetDate = Date.now.addingTimeInterval(remaining)
+        }
+
+        return JourneyActivityAttributes.ContentState(
+            progress: conductor.progress,
+            elapsedSeconds: conductor.elapsedSeconds,
+            targetDate: targetDate,
+            isPaused: conductor.isPaused,
+            isOverdriveActive: conductor.isOverdriveActive
+        )
+    }
 }
 
 // MARK: - Arc Progress View
@@ -454,7 +543,7 @@ private struct TrainArcView: View {
             let width = geo.size.width
             let height = geo.size.height
 
-            // Arc now sits above a reserved label strip, with an explicit gap
+
             let baseline: CGFloat = height - labelAreaHeight - arcToLabelGap
             let depth: CGFloat = min(30, baseline - 16)
             let halfWidth = max(1, width / 2 - sidePadding)

@@ -9,7 +9,6 @@ import Observation
 import SwiftData
 import Foundation
 
-
 struct JourneyCompletionOutcome {
     let stampAwarded: Bool
     let isFirstStampToday: Bool
@@ -22,22 +21,32 @@ struct JourneyCompletionOutcome {
 final class JourneyStore {
     private let context: ModelContext
 
+
+    var refreshTrigger: UUID = UUID()
+
     init(context: ModelContext) {
         self.context = context
     }
 
-    // MARK: Journeys
-
+    // MARK: - Journeys
 
     @discardableResult
     func completeJourney(_ result: JourneyResult) -> JourneyCompletionOutcome {
-        let journey = Journey(company: result.company, miles: result.miles, startTime: result.startTime, endTime: result.endTime, startPlace: result.startPlace, endPlace: result.endPlace)
+        let journey = Journey(
+            company: result.company,
+            miles: result.miles,
+            startTime: result.startTime,
+            endTime: result.endTime,
+            startPlace: result.startPlace,
+            endPlace: result.endPlace
+        )
         context.insert(journey)
         result.company.totalMiles += result.miles
         result.company.totalTimeTravelled += result.endTime.timeIntervalSince(result.startTime)
 
         let duration = result.endTime.timeIntervalSince(result.startTime)
         guard duration >= 15 * 60 else {
+            refreshTrigger = UUID()
             let status = currentStreakStatus()
             return JourneyCompletionOutcome(
                 stampAwarded: false,
@@ -51,11 +60,16 @@ final class JourneyStore {
         let pass = fetchOrCreateCommuterPass()
         let wasFirstToday = !hasStampToday(pass)
 
-        awardStamp()
+
+        if wasFirstToday {
+            awardStamp()
+        }
+
+        refreshTrigger = UUID()
 
         let status = currentStreakStatus()
         return JourneyCompletionOutcome(
-            stampAwarded: true,
+            stampAwarded: wasFirstToday,
             isFirstStampToday: wasFirstToday,
             streakWeeks: status.streakWeeks,
             dayStreak: status.dayStreak,
@@ -73,6 +87,14 @@ final class JourneyStore {
         journey.company.totalTimeTravelled -= journey.endTime.timeIntervalSince(journey.startTime)
 
         context.delete(journey)
+        refreshTrigger = UUID()
+    }
+
+    func fetchAllJourneys() -> [Journey] {
+        let descriptor = FetchDescriptor<Journey>(
+            sortBy: [SortDescriptor(\.startTime, order: .reverse)]
+        )
+        return (try? context.fetch(descriptor)) ?? []
     }
 
     func fetchRecentJourneys(limit: Int = 10) -> [Journey] {
@@ -100,7 +122,7 @@ final class JourneyStore {
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    // MARK: Rail Company
+    // MARK: - Rail Company
 
     func createCompany(
         name: String,
@@ -123,6 +145,7 @@ final class JourneyStore {
             fontColorHex: fontColorHex
         )
         context.insert(company)
+        refreshTrigger = UUID()
         return company
     }
 
@@ -135,9 +158,10 @@ final class JourneyStore {
 
     func deleteCompany(_ company: RailCompany) {
         context.delete(company)
+        refreshTrigger = UUID()
     }
 
-    // MARK: Commuter Pass
+    // MARK: - Commuter Pass
 
     func fetchOrCreateCommuterPass() -> CommuterPass {
         let descriptor = FetchDescriptor<CommuterPass>()
@@ -191,7 +215,6 @@ final class JourneyStore {
         return (pass.stampsLast7Days, pass.streakWeeks, dayStreak, pass.milestone)
     }
 
-
     private func computeDayStreak(for pass: CommuterPass) -> Int {
         let calendar = Calendar.current
         let stamps = pass.stamps
@@ -225,6 +248,7 @@ final class JourneyStore {
             company.totalMiles = 0
             company.totalTimeTravelled = 0
         }
+        refreshTrigger = UUID()
     }
 }
 
@@ -242,7 +266,6 @@ extension JourneyStore {
         let container = try! ModelContainer(for: schema, configurations: [configuration])
 
         let store = JourneyStore(context: container.mainContext)
-
 
         _ = store.createCompany(
             name: "Northline Rail",

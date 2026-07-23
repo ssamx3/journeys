@@ -17,7 +17,7 @@ final class RailCompany {
     var fontColorHex: String
 
 
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \Journey.company)
     var journeys: [Journey]? = []
 
     init(
