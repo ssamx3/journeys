@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		22D14D593013869300765861 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 22D14D583013868C00765861 /* README.md */; };
 		22ECF6AB3012341E00329D3B /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22ECF6AA3012341E00329D3B /* WidgetKit.framework */; };
 		22ECF6AD3012341E00329D3B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22ECF6AC3012341E00329D3B /* SwiftUI.framework */; };
 		22ECF6BA3012342000329D3B /* liveactivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 22ECF6A83012341E00329D3B /* liveactivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -38,6 +39,7 @@
 
 /* Begin PBXFileReference section */
 		22A9FBB13003D23A00118C3F /* journeys.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = journeys.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		22D14D583013868C00765861 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		22ECF6A83012341E00329D3B /* liveactivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = liveactivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ECF6AA3012341E00329D3B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = /System/Library/Frameworks/WidgetKit.framework; sourceTree = "<absolute>"; };
 		22ECF6AC3012341E00329D3B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = /System/Library/Frameworks/SwiftUI.framework; sourceTree = "<absolute>"; };
@@ -125,6 +127,7 @@
 				22ECF6AE3012341E00329D3B /* liveactivity */,
 				22ECF6A93012341E00329D3B /* Frameworks */,
 				22A9FBB23003D23A00118C3F /* Products */,
+				22D14D583013868C00765861 /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -238,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				22D14D593013869300765861 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

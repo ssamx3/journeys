@@ -15,7 +15,7 @@ struct ContainerView: View {
 
     @State private var showingStubBook = false
     @State private var showingCreatePass = false
-    @State private var statsRange: StatsRange = .week
+    @State private var showingStatsDetail = false
     @State private var showingTicketFlow = false
 
     @State private var companies: [RailCompany] = []
@@ -55,8 +55,8 @@ struct ContainerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .zIndex(1)
-                .opacity(selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook ? 0 : 1)
-                .animation(.easeOut(duration: 0.2), value: selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook)
+                .opacity(selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook || showingStatsDetail ? 0 : 1)
+                .animation(.easeOut(duration: 0.2), value: selectedCompany != nil || selectedJourney != nil || showingTicketFlow || showingStubBook || showingStatsDetail)
 
                 // MARK: Layer 2 — RailCompany Detail Overlay
                 if let company = selectedCompany {
@@ -85,6 +85,13 @@ struct ContainerView: View {
                         .zIndex(4)
                         .transition(.opacity)
                 }
+
+                // MARK: Layer 5 — Stats Detail Overlay
+                if showingStatsDetail {
+                    StatsDetailView(store: store, isPresented: $showingStatsDetail)
+                        .zIndex(5)
+                        .transition(.opacity)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingCreatePass) {
@@ -109,11 +116,14 @@ struct ContainerView: View {
                     refreshData()
                 }
             }
+            .onChange(of: showingStatsDetail) { _, isShowing in
+                if !isShowing {
+                    refreshData()
+                }
+            }
 
             .onAppear(perform: refreshData)
-            .onChange(of: statsRange) { _, _ in
-                updateStats()
-            }
+
             .onChange(of: selectedCompany) { _, newValue in
                 if newValue == nil {
                     refreshData()
@@ -140,18 +150,7 @@ struct ContainerView: View {
     private func updateStats() {
         let calendar = Calendar.current
         let now = Date()
-        let startDate: Date
-
-        switch statsRange {
-        case .day:
-            startDate = calendar.date(byAdding: .day, value: -1, to: now) ?? now
-        case .week:
-            startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-        case .month:
-            startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
-        case .year:
-            startDate = calendar.date(byAdding: .day, value: -365, to: now) ?? now
-        }
+        let startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
 
         let journeys = store.fetchJourneys(from: startDate)
 
@@ -321,8 +320,13 @@ struct ContainerView: View {
             HStack {
                 SectionLabel("stats")
                 Spacer()
-                StatsRangeSwitch(selection: $statsRange)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline)
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { showingStatsDetail = true }
 
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
@@ -411,48 +415,6 @@ struct ContainerView: View {
         let timeLabel: String
         let topOperator: String
         let personalBestMiles: Int
-    }
-
-    private enum StatsRange: String, CaseIterable {
-        case day = "24H"
-        case week = "7D"
-        case month = "30D"
-        case year = "365D"
-    }
-
-    private struct StatsRangeSwitch: View {
-        @Binding var selection: StatsRange
-        @Namespace private var namespace
-
-        var body: some View {
-            HStack(spacing: 2) {
-                ForEach(StatsRange.allCases, id: \.self) { range in
-                    Text(range.rawValue)
-                        .font(.caption2.weight(.semibold))
-                        .fontDesign(.rounded)
-                        .foregroundStyle(selection == range ? Color.primary : Color.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background {
-                            if selection == range {
-                                Capsule()
-                                    .fill(Color(.systemBackground))
-                                    .matchedGeometryEffect(id: "statsRangePill", in: namespace)
-                            }
-                        }
-                        .contentShape(Capsule())
-                        .onTapGesture {
-                            guard selection != range else { return }
-                            withAnimation(.snappy(duration: 0.3)) {
-                                selection = range
-                            }
-                        }
-                }
-            }
-            .padding(3)
-            .background(Color(.tertiarySystemFill))
-            .clipShape(Capsule())
-        }
     }
 
     // MARK: - Helpers
@@ -627,7 +589,7 @@ struct CommuterPassCard: View {
                             .tracking(1.4)
                             .foregroundStyle(.white.opacity(0.6))
 
-                        // Show day streak, not week streak
+
                         Text(streakLabel)
                             .font(.subheadline.weight(.semibold))
                             .fontDesign(.rounded)
@@ -703,8 +665,8 @@ struct PassCard: View {
     let blockPosition: CardBlockPosition
     let fontColor: Color
 
-    var width: CGFloat = 150
-    var height: CGFloat = 110
+    var width: CGFloat = 150 //150
+    var height: CGFloat = 110 //110
 
     var body: some View {
         ZStack(alignment: .topLeading) {

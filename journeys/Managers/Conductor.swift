@@ -78,10 +78,7 @@ final class Conductor {
         
     }
     
-    /// Pauses elapsed-time accumulation. Intended for indefinite journeys
-    /// only — the countdown-mode auto-disembark check keeps evaluating
-    /// against wall-clock progress, so pausing there would just delay a
-    /// finish the person already committed to.
+
     func pause() {
         guard startTime != nil, !isPaused else { return }
         isPaused = true

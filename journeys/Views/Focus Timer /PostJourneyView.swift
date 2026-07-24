@@ -353,56 +353,77 @@ private struct StampCollectCard: View {
     let milestone: CommuterPassMilestone
     let onComplete: (() -> Void)?
 
-    @State private var stampScale: CGFloat = 0.4
-    @State private var stampOpacity: Double = 0
-    @State private var stampRotation: Double = -14
-    @State private var showDetail = false
+    @State private var hasStamped: Bool
+    @State private var stampScale: CGFloat
+    @State private var stampOpacity: Double
+    @State private var stampRotation: Double
+    @State private var showDetail: Bool
+    @State private var ringPulse: Bool = false
+
+    init(isFirstToday: Bool, dayStreak: Int, streakWeeks: Int, milestone: CommuterPassMilestone, onComplete: (() -> Void)?) {
+        self.isFirstToday = isFirstToday
+        self.dayStreak = dayStreak
+        self.streakWeeks = streakWeeks
+        self.milestone = milestone
+        self.onComplete = onComplete
+
+        let preStamped = onComplete == nil
+        _hasStamped = State(initialValue: preStamped)
+        _stampScale = State(initialValue: preStamped ? 1.0 : 0.3)
+        _stampOpacity = State(initialValue: preStamped ? 1.0 : 0.0)
+        _stampRotation = State(initialValue: preStamped ? 0.0 : -20.0)
+        _showDetail = State(initialValue: preStamped)
+    }
 
     var body: some View {
-        Button(action: {
-            if let onComplete = onComplete {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                onComplete()
-            }
-        }) {
-            VStack(spacing: 10) {
+        Button(action: handleTap) {
+            VStack(spacing: 14) {
                 ZStack {
+                    // Empty ring before stamp
                     Circle()
-                        .fill(Color.orange.opacity(0.14))
-                        .frame(width: 72, height: 72)
+                        .stroke(.primary.opacity(0.15), lineWidth: 2)
+                        .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
+                        .frame(width: 80, height: 80)
+                        .scaleEffect(ringPulse ? 1.06 : 1.0)
+                        .opacity(hasStamped ? 0 : 1)
 
+                    // Stamp
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundStyle(.orange)
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(.primary)
                         .scaleEffect(stampScale)
                         .opacity(stampOpacity)
                         .rotationEffect(.degrees(stampRotation))
                 }
                 .padding(.top, 4)
 
-                VStack(spacing: 2) {
-                    Text(isFirstToday ? "Commuter pass stamped" : "Stamp collected")
+                VStack(spacing: 4) {
+                    Text(titleText)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.primary)
 
                     Text(streakSubtitle)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .opacity(showDetail ? 1 : 0)
-                .offset(y: showDetail ? 0 : 6)
+                .offset(y: showDetail ? 0 : 8)
 
-
-                if onComplete != nil {
+                if !hasStamped {
+                    Text("Tap to stamp")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .opacity(0.7)
+                } else if onComplete != nil {
                     Text("Tap to continue")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                         .opacity(showDetail ? 0.7 : 0)
-                        .padding(.top, 4)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
+            .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(.secondarySystemGroupedBackground))
@@ -410,7 +431,48 @@ private struct StampCollectCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(NoFlashButtonStyle())
-        .onAppear(perform: animateStamp)
+        .onAppear {
+            if onComplete != nil {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    ringPulse = true
+                }
+            }
+        }
+    }
+
+    private var titleText: String {
+        if !hasStamped {
+            return isFirstToday ? "Commuter pass ready" : "Stamp ready"
+        }
+        return isFirstToday ? "Commuter pass stamped" : "Stamp collected"
+    }
+
+    private func handleTap() {
+        guard !hasStamped else {
+            if let onComplete = onComplete {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                onComplete()
+            }
+            return
+        }
+
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        withAnimation(.easeOut(duration: 0.15)) {
+            hasStamped = true
+        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+            stampScale = 1.0
+            stampRotation = 0
+            stampOpacity = 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showDetail = true
+            }
+        }
     }
 
     private var streakSubtitle: String {
@@ -420,25 +482,6 @@ private struct StampCollectCard: View {
             return "\(milestone.streakDays)-day milestone reached"
         } else {
             return "Come back tomorrow to build a streak"
-        }
-    }
-
-    private func animateStamp() {
-        withAnimation(.easeIn(duration: 0.12)) {
-            stampScale = 0.55
-            stampOpacity = 1
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.45)) {
-                stampScale = 1.0
-                stampRotation = 0
-            }
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeOut(duration: 0.3)) {
-                showDetail = true
-            }
         }
     }
 }

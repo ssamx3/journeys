@@ -231,7 +231,7 @@ struct StubBookView: View {
 
 // MARK: - Native picker sheet wrapper
 
-private struct NativePickerSheet<Content: View>: View {
+struct NativePickerSheet<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
     let onDone: () -> Void
@@ -310,7 +310,6 @@ private struct StubBookRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Stub visual (matches ContainerView Stub design)
             VStack(alignment: .leading, spacing: 6) {
                 BarcodeShape(seed: seedString)
                     .frame(height: 18)

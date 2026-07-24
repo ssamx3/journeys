@@ -517,12 +517,11 @@ enum PlaceNames {
         Place(name: "Zephyrwick", code: "ZEP"),
     ]
     
-    /// O(1) lookup by three-letter calling code
+
     static let byCode: [String: Place] = {
         Dictionary(uniqueKeysWithValues: all.map { ($0.code, $0) })
     }()
-    
-    /// O(1) lookup by place name
+
     static let byName: [String: Place] = {
         Dictionary(uniqueKeysWithValues: all.map { ($0.name, $0) })
     }()

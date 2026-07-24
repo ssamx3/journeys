@@ -58,7 +58,9 @@ struct FocusTimerView: View {
                 Spacer(minLength: 0)
 
                 controls
+                
                 debugFooter
+                
 
                 
             }

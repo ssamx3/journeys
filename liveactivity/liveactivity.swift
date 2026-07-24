@@ -43,8 +43,7 @@ private struct LockScreenJourneyView: View {
     let attributes: JourneyActivityAttributes
     let state: JourneyActivityAttributes.ContentState
 
-    /// Derive progress from wall-clock time so the arc updates smoothly
-    /// without the app pushing frequent state updates.
+
     private var derivedProgress: Double {
         guard !attributes.isIndefinite, let targetDate = state.targetDate else {
             return 0
@@ -57,7 +56,7 @@ private struct LockScreenJourneyView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Arc or route line
+
             if !attributes.isIndefinite {
                 TrainArcView(
                     originCode: attributes.originCode,
@@ -76,7 +75,7 @@ private struct LockScreenJourneyView: View {
                 .padding(.vertical, 4)
             }
 
-            // Timer — centered in full-width container
+
             TimerReadout(state: state)
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .monospacedDigit()
@@ -87,11 +86,7 @@ private struct LockScreenJourneyView: View {
 }
 
 // MARK: - Expanded Dynamic Island layout
-//
-// The expanded Dynamic Island region is much narrower and shorter than the
-// lock screen card, so it gets its own compact layout instead of reusing
-// LockScreenJourneyView (which was overflowing/clipping there — that was
-// the "broken on long-press" issue).
+
 
 private struct ExpandedJourneyView: View {
     let attributes: JourneyActivityAttributes

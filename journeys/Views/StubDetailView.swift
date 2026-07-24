@@ -172,8 +172,7 @@ struct StubDetailView: View {
 
 // MARK: - Stat Tile 4
 
-/// Same tile shape as StatTile2 but with a small leading icon, used for the
-/// 2x2 grid on the stub detail screen. Monochrome only — no tint parameter.
+
 struct StatTile4: View {
     let value: String
     let label: String
