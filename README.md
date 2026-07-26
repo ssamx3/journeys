@@ -8,7 +8,7 @@ iOS 17.0+
 Xcode 15+
 Swift 5.9+
 
-Setup
+Setup and testing
 
 Clone the repository
 Open in Xcode 15 or later

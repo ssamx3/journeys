@@ -59,7 +59,7 @@ struct FocusTimerView: View {
 
                 controls
                 
-                debugFooter
+                
                 
 
                 

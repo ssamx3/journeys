@@ -212,7 +212,7 @@ struct StatsDetailView: View {
         case .year:
             startDate = calendar.date(byAdding: .day, value: -365, to: now) ?? now
         }
-
+        
         var journeys = store.fetchJourneys(from: startDate)
 
         if let operatorName = selectedOperator {
@@ -225,6 +225,7 @@ struct StatsDetailView: View {
         let operatorMiles = Dictionary(grouping: journeys, by: { $0.company.name })
             .mapValues { $0.reduce(0) { $0 + $1.miles } }
         let topOperator = operatorMiles.max(by: { $0.value < $1.value })?.key ?? "-"
+        
 
         let personalBest = journeys.map(\.miles).max() ?? 0
 
@@ -323,3 +324,5 @@ private enum StatsDateRange: CaseIterable {
 #Preview {
     StatsDetailView(store: .preview, isPresented: .constant(true))
 }
+
+

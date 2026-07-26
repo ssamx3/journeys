@@ -169,7 +169,8 @@ private struct CompletedTicketCard: View {
                     .foregroundStyle(.green)
 
                     Spacer()
-
+                    
+                    
                     HStack(spacing: 4) {
                         Image(systemName: "train.fill")
                             .font(.system(size: 10, weight: .bold))
