@@ -32,7 +32,7 @@ Build and run on an iOS 17 simulator or device (Or on macos via mac catalyst)
 
 ## 📃 License
 
-Copyright (c) 2026 sam
+Copyright (c) 2026 ssamx3
 You are permitted to view, build and modify this source code for personal, non-commercial use only.
 You may not distribute, sublicense, or create derivative works from this code. You may not use this code, in whole or in part, for any commercial purpose or for profit. All rights not expressly granted are reserved by the author.
 
