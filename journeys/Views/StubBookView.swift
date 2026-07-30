@@ -85,7 +85,7 @@ struct StubBookView: View {
 
             Spacer()
 
-            Text("Stub Book")
+            Text("Stubs")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .opacity(appearPhase)
                 .offset(y: 8 * (1 - appearPhase))

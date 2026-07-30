@@ -345,56 +345,23 @@ struct ContainerView: View {
         .cornerRadius(14)
     }
 
-    private var debugCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("debug")
 
-            HStack(spacing: 10) {
-                Button {
-                    addDummyJourney()
-                } label: {
-                    Label("Add Journey", systemImage: "plus.circle")
-                }
-                .buttonStyle(.appChip(selected: false))
-
-                Button {
-                    removeLastJourney()
-                } label: {
-                    Label("Remove Last", systemImage: "minus.circle")
-                }
-                .buttonStyle(.appChip(selected: false))
-
-                Button {
-                    resetAllJourneys()
-                } label: {
-                    Label("Reset All", systemImage: "trash.slash")
-                }
-                .buttonStyle(.appChip(selected: false))
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(14)
-    }
 
     // MARK: - Streak Helpers
 
-    /// Computes the current consecutive day streak — how many days in a row
-    /// (going backward from today) have at least one stamp.
+
     private func computeDayStreak(for pass: CommuterPass) -> Int {
         let calendar = Calendar.current
         let stamps = pass.stamps
         guard !stamps.isEmpty else { return 0 }
 
-        // Build a set of dates that have stamps (normalized to start of day)
+
         var stampDates = Set<Date>()
         for stamp in stamps {
             let startOfDay = calendar.startOfDay(for: stamp.date)
             stampDates.insert(startOfDay)
         }
 
-        // Count consecutive days backward from today
         let today = calendar.startOfDay(for: Date())
         var streak = 0
         var currentDate = today
@@ -457,33 +424,7 @@ struct ContainerView: View {
         }
     }
 
-    private func addDummyJourney() {
-        let allCompanies = store.fetchAllCompanies()
-        let company: RailCompany
-        if let existing = allCompanies.randomElement() {
-            company = existing
-        } else {
-            company = store.createCompany(name: "Debug Rail", cardText: "._.)")
-        }
 
-        let startPlace = PlaceNames.randomPlace()
-        let endPlace = PlaceNames.randomPlace()
-        let miles = Double.random(in: 5...100)
-        let startTime = Date().addingTimeInterval(-Double.random(in: 0...86400 * 7))
-        let duration = Double.random(in: 600...7200)
-        let endTime = startTime.addingTimeInterval(duration)
-
-        let result = JourneyResult(
-            company: company,
-            miles: miles,
-            startTime: startTime,
-            endTime: endTime,
-            startPlace: startPlace.name,
-            endPlace: endPlace.name
-        )
-        store.completeJourney(result)
-        refreshData()
-    }
 
     private func removeLastJourney() {
         if let last = recentJourneys.first {
